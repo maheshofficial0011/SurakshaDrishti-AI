@@ -29,3 +29,6 @@ python-dotenv
 # -----------------------------
 websockets
 requests
+
+imageio
+imageio-ffmpeg

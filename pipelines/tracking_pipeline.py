@@ -5,8 +5,14 @@ import os
 import sys
 import cv2
 import requests
+
+# 🟢 CHANGED: Added browser-compatible video writer
+# REASON: OpenCV mp4v clips may not play in browser video tag
+
+import imageio.v2 as imageio
 from datetime import datetime
 from pathlib import Path
+from collections import deque
 
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
@@ -20,12 +26,23 @@ from ai_engine.inference.detector import Detector
 BACKEND_EVENTS_URL = "http://127.0.0.1:8000/events"
 BACKEND_FRAME_URL = "http://127.0.0.1:8000/frame"
 
-# 🟢 CHANGED: Added alert snapshot recording directory
-# REASON: Save evidence image when event is generated
+# 🟢 CHANGED: Added alert recording directories
+# REASON: Store both image snapshots and short video clips as evidence
 
 RECORDINGS_DIR = Path("recordings")
+
 SNAPSHOTS_DIR = RECORDINGS_DIR / "snapshots"
 SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+
+CLIPS_DIR = RECORDINGS_DIR / "clips"
+CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+
+# 🟢 CHANGED: Added rolling video buffer settings
+# REASON: Save recent frames around alert events
+
+CLIP_FPS = 10
+CLIP_SECONDS = 5
+FRAME_BUFFER_SIZE = CLIP_FPS * CLIP_SECONDS
 # 🟢 CHANGED: Added camera metadata
 # REASON: Events and reports need camera identity/location
 
@@ -91,6 +108,56 @@ def save_event_snapshot(frame, event):
 
 # 🟢 CHANGED: Send annotated frame to backend
 # REASON: Enable live dashboard camera stream
+
+# 🟢 CHANGED: Save short alert video clip
+# REASON: Alerts should include playable video evidence, not only snapshot image
+
+
+# 🟢 CHANGED: Save browser-compatible alert video clip
+# REASON: OpenCV mp4v MP4 files may show in dashboard but not play in browser
+
+
+def save_event_clip(frame_buffer, event):
+    try:
+        if not frame_buffer:
+            return event
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        event_type = event.get("type", "EVENT")
+        camera_id = event.get("camera_id", "CAM")
+
+        filename = f"{camera_id}_{event_type}_{timestamp}.mp4"
+        file_path = CLIPS_DIR / filename
+
+        # 🟢 CHANGED: Convert OpenCV BGR frames to RGB for imageio
+        # REASON: imageio expects RGB frames for correct browser playback
+
+        rgb_frames = []
+
+        for buffered_frame in frame_buffer:
+            rgb_frame = cv2.cvtColor(buffered_frame, cv2.COLOR_BGR2RGB)
+            rgb_frames.append(rgb_frame)
+
+        # 🟢 CHANGED: Use imageio ffmpeg writer
+        # REASON: Produces browser-playable MP4 more reliably than cv2.VideoWriter
+
+        imageio.mimsave(
+            str(file_path),
+            rgb_frames,
+            fps=CLIP_FPS,
+            codec="libx264",
+            quality=7,
+            macro_block_size=16,
+        )
+
+        event["clip_file"] = filename
+        event["clip_url"] = f"http://127.0.0.1:8000/recordings/clips/{filename}"
+
+        return event
+
+    except Exception as e:
+        print("⚠ Clip save error:", e)
+        return event
 
 
 def send_frame_to_backend(frame):
@@ -158,6 +225,10 @@ def main():
     cv2.resizeWindow(window_name, 800, 600)
 
     print("SurakshaNet AI - Phase 6.2 Live Backend Integration Active")
+    # 🟢 CHANGED: Rolling frame buffer for alert video clips
+    # REASON: Keep recent frames so alerts can save short evidence video
+
+    frame_buffer = deque(maxlen=FRAME_BUFFER_SIZE)
 
     while True:
         ret, frame = cap.read()
@@ -167,6 +238,10 @@ def main():
             continue
 
         frame = cv2.resize(frame, (640, 480))
+        # 🟢 CHANGED: Store frame in rolling buffer
+        # REASON: Recent frames are used to generate alert video clips
+
+        frame_buffer.append(frame.copy())
 
         # 🟢 CHANGED: Use unified detector
         # REASON: Detection source for person tracking + weapon/PPE checks
@@ -243,6 +318,11 @@ def main():
             # REASON: Dashboard playback needs visual evidence
 
             event = save_event_snapshot(frame, event)
+
+            # 🟢 CHANGED: Save alert video clip for each event
+            # REASON: Alerts should include playable video evidence, not only snapshot image
+
+            event = save_event_clip(frame_buffer, event)
 
             print("🚨 EVENT:", event)
 

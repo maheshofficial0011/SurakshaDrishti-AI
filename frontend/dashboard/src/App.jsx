@@ -1099,6 +1099,41 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                 </div>
             )}
 
+            {/* 🟢 CHANGED: Display alert video clip */}
+            {/* REASON: Operator should review short recorded evidence clip for each alert */}
+
+            {event.clip_url && (
+                <div style={{ marginBottom: "10px" }}>
+                    <video
+                        src={event.clip_url}
+                        controls
+                        muted
+                        style={{
+                            width: "100%",
+                            maxHeight: "220px",
+                            borderRadius: "10px",
+                            border: "1px solid #334155",
+                            background: "#000",
+                        }}
+                    />
+
+                    <a
+                        href={event.clip_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                            color: "#38bdf8",
+                            fontSize: "13px",
+                            display: "inline-block",
+                            marginTop: "6px",
+                            textDecoration: "none",
+                        }}
+                    >
+                        🎞 Open Video Clip
+                    </a>
+                </div>
+            )}
+
             <div style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.6 }}>
                 {event.db_id !== undefined && <div>🗃 DB ID: {event.db_id}</div>}
 

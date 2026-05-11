@@ -432,6 +432,8 @@ def get_events_for_export(
                 "event_timestamp": row[14],
                 "snapshot_url": raw_event.get("snapshot_url", ""),
                 "snapshot_file": raw_event.get("snapshot_file", ""),
+                "clip_url": raw_event.get("clip_url", ""),
+                "clip_file": raw_event.get("clip_file", ""),
             }
         )
 
