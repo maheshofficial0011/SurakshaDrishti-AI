@@ -1,12 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 
+const API_BASE = "http://127.0.0.1:8000"
+const WS_URL = "ws://127.0.0.1:8000/ws/events"
+
 export default function App() {
     const [events, setEvents] = useState([])
     const [connectionStatus, setConnectionStatus] = useState("CONNECTING")
     const [latestToast, setLatestToast] = useState(null)
 
-    // 🟢 CHANGED: Added dashboard login state
-    // REASON: Protect dashboard with basic demo-level authentication
+    // 🟢 CHANGED: Dashboard login state
+    // REASON: Keep existing demo-level dashboard authentication
 
     const [authToken, setAuthToken] = useState(
         localStorage.getItem("surakshanet_token") || ""
@@ -17,30 +20,46 @@ export default function App() {
     const [loginError, setLoginError] = useState("")
     const isAuthenticated = Boolean(authToken)
 
-    // 🟢 CHANGED: Added backend health/loading states
-    // REASON: Dashboard should clearly show backend availability during demos
+    // 🟢 CHANGED: Backend health/loading states
+    // REASON: Professional UI needs clear API/WebSocket visibility
 
     const [backendStatus, setBackendStatus] = useState("CHECKING")
     const [lastError, setLastError] = useState("")
 
-    // 🟢 CHANGED: Added backend analytics state
-    // REASON: Dashboard should sync summary data from backend analytics APIs
+    // 🟢 CHANGED: Backend analytics state
+    // REASON: Dashboard syncs with analytics APIs
 
     const [backendAnalytics, setBackendAnalytics] = useState(null)
     const [analyticsByType, setAnalyticsByType] = useState([])
     const [riskZones, setRiskZones] = useState([])
 
-    // 🟢 CHANGED: Added dashboard filter state
-    // REASON: Allow operator to filter saved event history from database
+    // 🟢 CHANGED: Dashboard filters
+    // REASON: Operator can filter event history
 
     const [typeFilter, setTypeFilter] = useState("")
     const [severityFilter, setSeverityFilter] = useState("")
     const [limitFilter, setLimitFilter] = useState(100)
 
+    // 🟢 CHANGED: Live clock
+    // REASON: Professional command dashboards show operator time
+
+    const [clock, setClock] = useState(new Date())
+
     const audioRef = useRef(null)
 
-    // 🟢 CHANGED: Added login handler
-    // REASON: Authenticate user before showing dashboard
+    useEffect(() => {
+        audioRef.current = new Audio(
+            "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
+        )
+    }, [])
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setClock(new Date())
+        }, 1000)
+
+        return () => clearInterval(timer)
+    }, [])
 
     async function handleLogin(event) {
         event.preventDefault()
@@ -48,7 +67,7 @@ export default function App() {
         try {
             setLoginError("")
 
-            const response = await fetch("http://127.0.0.1:8000/auth/login", {
+            const response = await fetch(`${API_BASE}/auth/login`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
@@ -74,9 +93,6 @@ export default function App() {
         }
     }
 
-    // 🟢 CHANGED: Added logout handler
-    // REASON: Allow operator to exit dashboard session
-
     function handleLogout() {
         localStorage.removeItem("surakshanet_token")
         setAuthToken("")
@@ -86,15 +102,9 @@ export default function App() {
         setBackendStatus("CHECKING")
     }
 
-    useEffect(() => {
-        audioRef.current = new Audio(
-            "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABAAZGF0YQAAAAA="
-        )
-    }, [])
-
     async function checkBackendHealth() {
         try {
-            const response = await fetch("http://127.0.0.1:8000/health")
+            const response = await fetch(`${API_BASE}/health`)
 
             if (!response.ok) {
                 throw new Error("Backend health check failed")
@@ -123,9 +133,7 @@ export default function App() {
 
             params.append("limit", limitFilter)
 
-            const response = await fetch(
-                `http://127.0.0.1:8000/events?${params.toString()}`
-            )
+            const response = await fetch(`${API_BASE}/events?${params.toString()}`)
 
             if (!response.ok) {
                 throw new Error("Failed to fetch event history")
@@ -144,9 +152,9 @@ export default function App() {
     async function loadBackendAnalytics() {
         try {
             const [summaryRes, typeRes, zonesRes] = await Promise.all([
-                fetch("http://127.0.0.1:8000/analytics/summary"),
-                fetch("http://127.0.0.1:8000/analytics/by-type"),
-                fetch("http://127.0.0.1:8000/analytics/risk-zones"),
+                fetch(`${API_BASE}/analytics/summary`),
+                fetch(`${API_BASE}/analytics/by-type`),
+                fetch(`${API_BASE}/analytics/risk-zones`),
             ])
 
             if (!summaryRes.ok || !typeRes.ok || !zonesRes.ok) {
@@ -169,7 +177,7 @@ export default function App() {
 
     async function clearEventHistory() {
         try {
-            const response = await fetch("http://127.0.0.1:8000/events", {
+            const response = await fetch(`${API_BASE}/events`, {
                 method: "DELETE",
             })
 
@@ -200,23 +208,16 @@ export default function App() {
 
         params.append("limit", limitFilter)
 
-        const url = `http://127.0.0.1:8000/reports/events/${format}?${params.toString()}`
-
-        window.open(url, "_blank")
+        window.open(`${API_BASE}/reports/events/${format}?${params.toString()}`, "_blank")
     }
 
     function exportDailySummary() {
-        const url = "http://127.0.0.1:8000/reports/daily-summary/json"
-
-        window.open(url, "_blank")
+        window.open(`${API_BASE}/reports/daily-summary/json`, "_blank")
     }
-
-    // 🟢 CHANGED: Added manual test alert trigger
-    // REASON: Allows demo/testing without camera event being triggered
 
     async function triggerTestAlert() {
         try {
-            const response = await fetch("http://127.0.0.1:8000/events/test", {
+            const response = await fetch(`${API_BASE}/events/test`, {
                 method: "POST",
             })
 
@@ -248,10 +249,9 @@ export default function App() {
             return
         }
 
-        const ws = new WebSocket("ws://127.0.0.1:8000/ws/events")
+        const ws = new WebSocket(WS_URL)
 
         ws.onopen = () => {
-            console.log("🟢 WebSocket connected")
             setConnectionStatus("CONNECTED")
         }
 
@@ -311,7 +311,6 @@ export default function App() {
         }
 
         ws.onclose = () => {
-            console.log("🔴 WebSocket disconnected")
             setConnectionStatus("DISCONNECTED")
         }
 
@@ -329,9 +328,7 @@ export default function App() {
         let medium = 0
         let low = 0
         let info = 0
-
-        const zoneCounts = {}
-        const typeCounts = {}
+        let evidenceCount = 0
 
         events.forEach((e) => {
             if (e.type === "INTRUSION") intrusion++
@@ -346,25 +343,12 @@ export default function App() {
             else if (e.severity === "LOW") low++
             else info++
 
-            if (e.zone) {
-                zoneCounts[e.zone] = (zoneCounts[e.zone] || 0) + 1
-            }
-
-            if (e.type) {
-                typeCounts[e.type] = (typeCounts[e.type] || 0) + 1
+            if (e.snapshot_url || e.clip_url) {
+                evidenceCount++
             }
         })
 
-        const highestRiskZone =
-            Object.entries(zoneCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-            "No zone data"
-
-        const topEventType =
-            Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0]?.[0] ||
-            "No events"
-
         const highPriorityCount = critical + high
-
         const highPriorityPercent =
             events.length > 0 ? Math.round((highPriorityCount / events.length) * 100) : 0
 
@@ -380,10 +364,9 @@ export default function App() {
             low,
             info,
             total: events.length,
-            highestRiskZone,
-            topEventType,
             highPriorityCount,
             highPriorityPercent,
+            evidenceCount,
         }
     }, [events])
 
@@ -406,7 +389,7 @@ export default function App() {
         return "📡"
     }
 
-    function getStatusColor() {
+    function getSystemHealthColor() {
         if (connectionStatus === "CONNECTED" && backendStatus === "ONLINE") {
             return "#22c55e"
         }
@@ -421,6 +404,10 @@ export default function App() {
     const latestCritical = events.find(
         (e) => e.severity === "CRITICAL" || e.severity === "HIGH"
     )
+
+    const latestEvent = events[0]
+    const topEventType = analyticsByType[0]?.type || "No events"
+    const topRiskZone = riskZones[0]?.zone || "No zone data"
 
     if (!isAuthenticated) {
         return (
@@ -438,13 +425,12 @@ export default function App() {
     return (
         <div
             style={{
-                background: "#020617",
                 minHeight: "100vh",
+                background: "#020617",
                 color: "white",
-                padding: "20px",
-                fontFamily: "Arial, sans-serif",
-                position: "relative",
-                overflowX: "hidden",
+                fontFamily: "Inter, Arial, sans-serif",
+                display: "grid",
+                gridTemplateColumns: "260px 1fr",
             }}
         >
             <style>
@@ -471,13 +457,26 @@ export default function App() {
                         100% { opacity: 0.35; }
                     }
 
-                    select, button {
+                    select, button, input {
                         outline: none;
                     }
 
                     button:hover {
                         filter: brightness(1.15);
                         cursor: pointer;
+                    }
+
+                    .scroll-soft::-webkit-scrollbar {
+                        width: 8px;
+                    }
+
+                    .scroll-soft::-webkit-scrollbar-thumb {
+                        background: #334155;
+                        border-radius: 999px;
+                    }
+
+                    .scroll-soft::-webkit-scrollbar-track {
+                        background: #0f172a;
                     }
                 `}
             </style>
@@ -490,460 +489,517 @@ export default function App() {
                 />
             )}
 
-            {/* HEADER */}
+            {/* SIDEBAR */}
 
-            <div
+            <aside
                 style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    marginBottom: "20px",
-                    gap: "16px",
+                    background: "#020617",
+                    borderRight: "1px solid #1e293b",
+                    padding: "22px 18px",
+                    position: "sticky",
+                    top: 0,
+                    height: "100vh",
+                    boxSizing: "border-box",
                 }}
             >
-                <div>
-                    <h1 style={{ margin: 0, fontSize: "32px" }}>🛡️ SurakshaNet AI</h1>
-
-                    <p style={{ color: "#94a3b8", marginTop: "6px" }}>
-                        Professional Real-Time Surveillance Command Dashboard
-                    </p>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <div style={{ marginBottom: "26px" }}>
                     <div
                         style={{
-                            background: "#0f172a",
-                            padding: "12px 20px",
-                            borderRadius: "12px",
-                            border: `1px solid ${getStatusColor()}`,
-                            color: getStatusColor(),
-                            fontWeight: "bold",
-                            whiteSpace: "nowrap",
-                        }}
-                    >
-                        <span style={{ animation: "liveDot 1s infinite" }}>●</span>{" "}
-                        WS: {connectionStatus} | API: {backendStatus}
-                    </div>
-
-                    <button
-                        onClick={handleLogout}
-                        style={{
-                            background: "#7f1d1d",
-                            color: "white",
-                            border: "1px solid #ef4444",
-                            borderRadius: "12px",
-                            padding: "12px 16px",
-                            fontWeight: "bold",
-                        }}
-                    >
-                        Logout
-                    </button>
-                </div>
-            </div>
-
-            {/* OPERATOR ERROR BANNER */}
-
-            {lastError && (
-                <div
-                    style={{
-                        background: "#7f1d1d",
-                        border: "1px solid #ef4444",
-                        color: "#fee2e2",
-                        padding: "12px 16px",
-                        borderRadius: "12px",
-                        marginBottom: "20px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    ⚠ {lastError}
-                </div>
-            )}
-
-            {/* FILTER BAR */}
-
-            <div
-                style={{
-                    background: "#0f172a",
-                    border: "1px solid #1e293b",
-                    borderRadius: "16px",
-                    padding: "16px",
-                    marginBottom: "20px",
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr auto auto auto auto auto auto",
-                    gap: "12px",
-                    alignItems: "end",
-                }}
-            >
-                <FilterSelect
-                    label="Event Type"
-                    value={typeFilter}
-                    onChange={setTypeFilter}
-                    options={[
-                        ["", "All Types"],
-                        ["INTRUSION", "Intrusion"],
-                        ["LOITERING", "Loitering"],
-                        ["CROWD_ALERT", "Crowd Alert"],
-                        ["WEAPON_DETECTED", "Weapon Detected"],
-                        ["PPE_VIOLATION", "PPE Violation"],
-                    ]}
-                />
-
-                <FilterSelect
-                    label="Severity"
-                    value={severityFilter}
-                    onChange={setSeverityFilter}
-                    options={[
-                        ["", "All Severity"],
-                        ["CRITICAL", "Critical"],
-                        ["HIGH", "High"],
-                        ["MEDIUM", "Medium"],
-                        ["LOW", "Low"],
-                        ["INFO", "Info"],
-                    ]}
-                />
-
-                <FilterSelect
-                    label="Limit"
-                    value={String(limitFilter)}
-                    onChange={(value) => setLimitFilter(Number(value))}
-                    options={[
-                        ["20", "20 Events"],
-                        ["50", "50 Events"],
-                        ["100", "100 Events"],
-                        ["200", "200 Events"],
-                        ["500", "500 Events"],
-                    ]}
-                />
-
-                <button
-                    onClick={loadEventHistory}
-                    style={{
-                        background: "#2563eb",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    🔄 Refresh
-                </button>
-
-                <button
-                    onClick={triggerTestAlert}
-                    style={{
-                        background: "#92400e",
-                        color: "white",
-                        border: "1px solid #f59e0b",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    🧪 Test Alert
-                </button>
-
-                <button
-                    onClick={() => exportReport("json")}
-                    style={{
-                        background: "#0f766e",
-                        color: "white",
-                        border: "1px solid #14b8a6",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    ⬇ JSON
-                </button>
-
-                <button
-                    onClick={() => exportReport("csv")}
-                    style={{
-                        background: "#365314",
-                        color: "white",
-                        border: "1px solid #84cc16",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    ⬇ CSV
-                </button>
-
-                <button
-                    onClick={exportDailySummary}
-                    style={{
-                        background: "#581c87",
-                        color: "white",
-                        border: "1px solid #a855f7",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    📊 Daily
-                </button>
-
-                <button
-                    onClick={clearEventHistory}
-                    style={{
-                        background: "#7f1d1d",
-                        color: "white",
-                        border: "1px solid #ef4444",
-                        borderRadius: "10px",
-                        padding: "12px 14px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    🧹 Clear
-                </button>
-            </div>
-
-            {/* CRITICAL ALERT BANNER */}
-
-            {latestCritical && (
-                <div
-                    style={{
-                        background: "linear-gradient(90deg, #7f1d1d, #111827)",
-                        border: "2px solid #ef4444",
-                        padding: "15px 20px",
-                        borderRadius: "14px",
-                        marginBottom: "20px",
-                        animation: "pulseAlert 1.5s infinite",
-                    }}
-                >
-                    <div
-                        style={{
-                            fontSize: "14px",
-                            color: "#fecaca",
-                            marginBottom: "6px",
-                            fontWeight: "bold",
-                        }}
-                    >
-                        ACTIVE HIGH PRIORITY ALERT
-                    </div>
-
-                    <div style={{ fontSize: "22px", fontWeight: "bold" }}>
-                        {getEventIcon(latestCritical.type)} {latestCritical.type}
-                    </div>
-
-                    <div style={{ color: "#e5e7eb", marginTop: "6px" }}>
-                        {latestCritical.message || "Critical surveillance event detected"}
-                    </div>
-                </div>
-            )}
-
-            {/* STATS */}
-
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(6, 1fr)",
-                    gap: "14px",
-                    marginBottom: "22px",
-                }}
-            >
-                <StatCard title="Shown Events" value={stats.total} color="#38bdf8" />
-                <StatCard title="Intrusions" value={stats.intrusion} color="#ef4444" />
-                <StatCard title="Loitering" value={stats.loitering} color="#f59e0b" />
-                <StatCard title="Crowd" value={stats.crowd} color="#a855f7" />
-                <StatCard title="Weapons" value={stats.weapon} color="#dc2626" />
-                <StatCard title="PPE" value={stats.ppe} color="#22c55e" />
-            </div>
-
-            {/* ANALYTICS CARDS */}
-
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: "14px",
-                    marginBottom: "22px",
-                }}
-            >
-                <AnalyticsCard
-                    title="Database Events"
-                    value={backendAnalytics?.total_events ?? stats.total}
-                    subtitle="Total saved alerts in SQLite"
-                    color="#38bdf8"
-                />
-
-                <AnalyticsCard
-                    title="Highest Risk Zone"
-                    value={riskZones[0]?.zone || "No zone data"}
-                    subtitle={
-                        riskZones[0]
-                            ? `${riskZones[0].count} alerts recorded`
-                            : "No zone alerts yet"
-                    }
-                    color="#ef4444"
-                />
-
-                <AnalyticsCard
-                    title="Top Event Type"
-                    value={analyticsByType[0]?.type || "No events"}
-                    subtitle={
-                        analyticsByType[0]
-                            ? `${analyticsByType[0].count} events recorded`
-                            : "No event type data"
-                    }
-                    color="#a855f7"
-                />
-
-                <AnalyticsCard
-                    title="High Priority"
-                    value={`${backendAnalytics?.high_priority_percent ?? stats.highPriorityPercent}%`}
-                    subtitle={`${backendAnalytics?.high_priority_count ?? stats.highPriorityCount} high/critical database events`}
-                    color="#f59e0b"
-                />
-            </div>
-
-            {/* BACKEND ANALYTICS STATUS */}
-
-            <div
-                style={{
-                    background: "#0f172a",
-                    border: "1px solid #1e293b",
-                    borderRadius: "14px",
-                    padding: "12px 16px",
-                    marginBottom: "22px",
-                    color: "#94a3b8",
-                    fontSize: "13px",
-                }}
-            >
-                Backend Analytics API:{" "}
-                <span style={{ color: backendAnalytics ? "#22c55e" : "#f59e0b" }}>
-                    {backendAnalytics ? "SYNCED" : "LOADING"}
-                </span>
-            </div>
-
-            {/* MAIN GRID */}
-
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "2fr 1fr",
-                    gap: "20px",
-                    alignItems: "start",
-                }}
-            >
-                <div
-                    style={{
-                        background: "#0f172a",
-                        padding: "16px",
-                        borderRadius: "16px",
-                        border: "1px solid #1e293b",
-                    }}
-                >
-                    <div
-                        style={{
+                            width: "46px",
+                            height: "46px",
+                            borderRadius: "14px",
+                            background: "linear-gradient(135deg, #0ea5e9, #1d4ed8)",
                             display: "flex",
-                            justifyContent: "space-between",
                             alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "24px",
                             marginBottom: "12px",
                         }}
                     >
-                        <h2 style={{ margin: 0 }}>📹 Live Camera Feed</h2>
-
-                        <span
-                            style={{
-                                color: "#22c55e",
-                                background: "rgba(34, 197, 94, 0.12)",
-                                border: "1px solid #22c55e",
-                                padding: "6px 10px",
-                                borderRadius: "999px",
-                                fontSize: "12px",
-                                fontWeight: "bold",
-                            }}
-                        >
-                            LIVE
-                        </span>
+                        🛡️
                     </div>
 
-                    <img
-                        src="http://127.0.0.1:8000/video_feed"
-                        alt="Live Feed"
-                        style={{
-                            width: "100%",
-                            borderRadius: "12px",
-                            border: "2px solid #22c55e",
-                            background: "#000",
-                        }}
-                    />
-
-                    <div
-                        style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(5, 1fr)",
-                            gap: "12px",
-                            marginTop: "14px",
-                        }}
-                    >
-                        <MiniSeverityCard
-                            title="Critical"
-                            value={backendAnalytics?.severity?.critical ?? stats.critical}
-                            color="#dc2626"
-                        />
-
-                        <MiniSeverityCard
-                            title="High"
-                            value={backendAnalytics?.severity?.high ?? stats.high}
-                            color="#ef4444"
-                        />
-
-                        <MiniSeverityCard
-                            title="Medium"
-                            value={backendAnalytics?.severity?.medium ?? stats.medium}
-                            color="#f59e0b"
-                        />
-
-                        <MiniSeverityCard
-                            title="Low"
-                            value={backendAnalytics?.severity?.low ?? stats.low}
-                            color="#22c55e"
-                        />
-
-                        <MiniSeverityCard title="Info" value={stats.info} color="#38bdf8" />
-                    </div>
+                    <h2 style={{ margin: 0, fontSize: "21px" }}>SurakshaNet AI</h2>
+                    <p style={{ color: "#64748b", fontSize: "13px", marginTop: "6px" }}>
+                        Surveillance Command OS
+                    </p>
                 </div>
+
+                <SidebarItem icon="📊" label="Dashboard" active />
+                <SidebarItem icon="📹" label="Live Feed" />
+                <SidebarItem icon="🚨" label="Alerts" />
+                <SidebarItem icon="📈" label="Analytics" />
+                <SidebarItem icon="📁" label="Reports" />
+                <SidebarItem icon="⚙️" label="Settings" />
 
                 <div
                     style={{
+                        marginTop: "28px",
                         background: "#0f172a",
-                        padding: "16px",
-                        borderRadius: "16px",
                         border: "1px solid #1e293b",
-                        maxHeight: "760px",
-                        overflowY: "auto",
+                        borderRadius: "16px",
+                        padding: "14px",
                     }}
                 >
-                    <h2 style={{ marginTop: 0 }}>🚨 Filtered Alerts</h2>
+                    <div style={{ color: "#94a3b8", fontSize: "12px", marginBottom: "8px" }}>
+                        SYSTEM MODE
+                    </div>
 
-                    {events.length === 0 ? (
+                    <div style={{ color: "#22c55e", fontWeight: "bold" }}>
+                        Snapshot Evidence
+                    </div>
+
+                    <div style={{ color: "#64748b", fontSize: "12px", marginTop: "6px" }}>
+                        Video clips optional for performance.
+                    </div>
+                </div>
+            </aside>
+
+            {/* MAIN */}
+
+            <main
+                className="scroll-soft"
+                style={{
+                    padding: "22px",
+                    overflowY: "auto",
+                    maxHeight: "100vh",
+                    boxSizing: "border-box",
+                }}
+            >
+                {/* HEADER */}
+
+                <div
+                    style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        marginBottom: "18px",
+                        gap: "18px",
+                    }}
+                >
+                    <div>
+                        <h1 style={{ margin: 0, fontSize: "30px", letterSpacing: "-0.5px" }}>
+                            Command Dashboard
+                        </h1>
+
+                        <p style={{ color: "#94a3b8", marginTop: "6px" }}>
+                            Real-time AI surveillance, event intelligence, and evidence review.
+                        </p>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        <StatusPill
+                            label={`WS: ${connectionStatus}`}
+                            color={
+                                connectionStatus === "CONNECTED"
+                                    ? "#22c55e"
+                                    : connectionStatus === "CONNECTING"
+                                        ? "#f59e0b"
+                                        : "#ef4444"
+                            }
+                        />
+
+                        <StatusPill
+                            label={`API: ${backendStatus}`}
+                            color={backendStatus === "ONLINE" ? "#22c55e" : "#ef4444"}
+                        />
+
                         <div
                             style={{
-                                color: "#94a3b8",
-                                background: "#111827",
-                                padding: "14px",
-                                borderRadius: "10px",
+                                background: "#0f172a",
+                                border: "1px solid #1e293b",
+                                padding: "11px 14px",
+                                borderRadius: "12px",
+                                color: "#cbd5e1",
+                                fontWeight: "bold",
+                                whiteSpace: "nowrap",
                             }}
                         >
-                            No alerts match current filters.
+                            {clock.toLocaleTimeString()}
                         </div>
-                    ) : (
-                        events.map((event, index) => (
-                            <AlertCard
-                                key={`${event.db_id || event.type}-${index}`}
-                                event={event}
-                                index={index}
-                                getSeverityColor={getSeverityColor}
-                                getEventIcon={getEventIcon}
-                            />
-                        ))
-                    )}
+
+                        <button
+                            onClick={handleLogout}
+                            style={{
+                                background: "#7f1d1d",
+                                color: "white",
+                                border: "1px solid #ef4444",
+                                borderRadius: "12px",
+                                padding: "11px 15px",
+                                fontWeight: "bold",
+                            }}
+                        >
+                            Logout
+                        </button>
+                    </div>
                 </div>
-            </div>
+
+                {/* OPERATOR STATUS BAR */}
+
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: "12px",
+                        marginBottom: "18px",
+                    }}
+                >
+                    <OperatorStatus
+                        label="System Health"
+                        value={
+                            connectionStatus === "CONNECTED" && backendStatus === "ONLINE"
+                                ? "Operational"
+                                : "Needs Attention"
+                        }
+                        color={getSystemHealthColor()}
+                    />
+
+                    <OperatorStatus
+                        label="Camera"
+                        value="CAM-01 Main Gate"
+                        color="#38bdf8"
+                    />
+
+                    <OperatorStatus
+                        label="Latest Alert"
+                        value={latestEvent?.type || "No alerts"}
+                        color={latestEvent ? getSeverityColor(latestEvent.severity) : "#64748b"}
+                    />
+
+                    <OperatorStatus
+                        label="Evidence"
+                        value={`${stats.evidenceCount} captured`}
+                        color="#a855f7"
+                    />
+                </div>
+
+                {lastError && (
+                    <div
+                        style={{
+                            background: "#7f1d1d",
+                            border: "1px solid #ef4444",
+                            color: "#fee2e2",
+                            padding: "12px 16px",
+                            borderRadius: "14px",
+                            marginBottom: "18px",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        ⚠ {lastError}
+                    </div>
+                )}
+
+                {/* FILTERS */}
+
+                <Panel title="Operator Controls" compact>
+                    <div
+                        style={{
+                            display: "grid",
+                            gridTemplateColumns: "1fr 1fr 1fr auto auto auto auto auto auto",
+                            gap: "12px",
+                            alignItems: "end",
+                        }}
+                    >
+                        <FilterSelect
+                            label="Event Type"
+                            value={typeFilter}
+                            onChange={setTypeFilter}
+                            options={[
+                                ["", "All Types"],
+                                ["INTRUSION", "Intrusion"],
+                                ["LOITERING", "Loitering"],
+                                ["CROWD_ALERT", "Crowd Alert"],
+                                ["WEAPON_DETECTED", "Weapon Detected"],
+                                ["PPE_VIOLATION", "PPE Violation"],
+                            ]}
+                        />
+
+                        <FilterSelect
+                            label="Severity"
+                            value={severityFilter}
+                            onChange={setSeverityFilter}
+                            options={[
+                                ["", "All Severity"],
+                                ["CRITICAL", "Critical"],
+                                ["HIGH", "High"],
+                                ["MEDIUM", "Medium"],
+                                ["LOW", "Low"],
+                                ["INFO", "Info"],
+                            ]}
+                        />
+
+                        <FilterSelect
+                            label="Limit"
+                            value={String(limitFilter)}
+                            onChange={(value) => setLimitFilter(Number(value))}
+                            options={[
+                                ["20", "20 Events"],
+                                ["50", "50 Events"],
+                                ["100", "100 Events"],
+                                ["200", "200 Events"],
+                                ["500", "500 Events"],
+                            ]}
+                        />
+
+                        <ActionButton label="🔄 Refresh" color="#2563eb" onClick={loadEventHistory} />
+                        <ActionButton label="🧪 Test Alert" color="#92400e" onClick={triggerTestAlert} />
+                        <ActionButton label="⬇ JSON" color="#0f766e" onClick={() => exportReport("json")} />
+                        <ActionButton label="⬇ CSV" color="#365314" onClick={() => exportReport("csv")} />
+                        <ActionButton label="📊 Daily" color="#581c87" onClick={exportDailySummary} />
+                        <ActionButton label="🧹 Clear" color="#7f1d1d" onClick={clearEventHistory} />
+                    </div>
+                </Panel>
+
+                {/* CRITICAL ALERT BANNER */}
+
+                {latestCritical && (
+                    <div
+                        style={{
+                            background: "linear-gradient(90deg, #7f1d1d, #111827)",
+                            border: "1px solid #ef4444",
+                            padding: "16px 18px",
+                            borderRadius: "18px",
+                            marginBottom: "18px",
+                            animation: "pulseAlert 1.5s infinite",
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#fecaca",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "7px",
+                                letterSpacing: "0.5px",
+                            }}
+                        >
+                            ACTIVE HIGH PRIORITY ALERT
+                        </div>
+
+                        <div style={{ fontSize: "22px", fontWeight: "bold" }}>
+                            {getEventIcon(latestCritical.type)} {latestCritical.type}
+                        </div>
+
+                        <div style={{ color: "#e5e7eb", marginTop: "6px" }}>
+                            {latestCritical.message || "Critical surveillance event detected"}
+                        </div>
+                    </div>
+                )}
+
+                {/* KPI ROW */}
+
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(6, 1fr)",
+                        gap: "14px",
+                        marginBottom: "18px",
+                    }}
+                >
+                    <StatCard title="Shown Events" value={stats.total} color="#38bdf8" />
+                    <StatCard title="Intrusions" value={stats.intrusion} color="#ef4444" />
+                    <StatCard title="Loitering" value={stats.loitering} color="#f59e0b" />
+                    <StatCard title="Crowd" value={stats.crowd} color="#a855f7" />
+                    <StatCard title="Weapons" value={stats.weapon} color="#dc2626" />
+                    <StatCard title="PPE" value={stats.ppe} color="#22c55e" />
+                </div>
+
+                {/* ANALYTICS ROW */}
+
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(4, 1fr)",
+                        gap: "14px",
+                        marginBottom: "18px",
+                    }}
+                >
+                    <AnalyticsCard
+                        title="Database Events"
+                        value={backendAnalytics?.total_events ?? stats.total}
+                        subtitle="Total saved alerts in SQLite"
+                        color="#38bdf8"
+                    />
+
+                    <AnalyticsCard
+                        title="Highest Risk Zone"
+                        value={topRiskZone}
+                        subtitle={
+                            riskZones[0]
+                                ? `${riskZones[0].count} alerts recorded`
+                                : "No zone alerts yet"
+                        }
+                        color="#ef4444"
+                    />
+
+                    <AnalyticsCard
+                        title="Top Event Type"
+                        value={topEventType}
+                        subtitle={
+                            analyticsByType[0]
+                                ? `${analyticsByType[0].count} events recorded`
+                                : "No event type data"
+                        }
+                        color="#a855f7"
+                    />
+
+                    <AnalyticsCard
+                        title="High Priority"
+                        value={`${backendAnalytics?.high_priority_percent ?? stats.highPriorityPercent}%`}
+                        subtitle={`${backendAnalytics?.high_priority_count ?? stats.highPriorityCount} high/critical database events`}
+                        color="#f59e0b"
+                    />
+                </div>
+
+                {/* MAIN GRID */}
+
+                <div
+                    style={{
+                        display: "grid",
+                        gridTemplateColumns: "minmax(0, 2fr) minmax(380px, 1fr)",
+                        gap: "18px",
+                        alignItems: "start",
+                    }}
+                >
+                    <div>
+                        <Panel title="📹 Live AI Camera Feed">
+                            <div
+                                style={{
+                                    position: "relative",
+                                    background: "#000",
+                                    borderRadius: "16px",
+                                    overflow: "hidden",
+                                    border: "1px solid #1e293b",
+                                }}
+                            >
+                                <img
+                                    src={`${API_BASE}/video_feed`}
+                                    alt="Live Feed"
+                                    style={{
+                                        width: "100%",
+                                        display: "block",
+                                        background: "#000",
+                                    }}
+                                />
+
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        top: "12px",
+                                        left: "12px",
+                                        display: "flex",
+                                        gap: "8px",
+                                    }}
+                                >
+                                    <Badge label="LIVE" color="#22c55e" />
+                                    <Badge label="CAM-01" color="#38bdf8" />
+                                </div>
+                            </div>
+
+                            <div
+                                style={{
+                                    display: "grid",
+                                    gridTemplateColumns: "repeat(5, 1fr)",
+                                    gap: "12px",
+                                    marginTop: "14px",
+                                }}
+                            >
+                                <MiniSeverityCard
+                                    title="Critical"
+                                    value={backendAnalytics?.severity?.critical ?? stats.critical}
+                                    color="#dc2626"
+                                />
+
+                                <MiniSeverityCard
+                                    title="High"
+                                    value={backendAnalytics?.severity?.high ?? stats.high}
+                                    color="#ef4444"
+                                />
+
+                                <MiniSeverityCard
+                                    title="Medium"
+                                    value={backendAnalytics?.severity?.medium ?? stats.medium}
+                                    color="#f59e0b"
+                                />
+
+                                <MiniSeverityCard
+                                    title="Low"
+                                    value={backendAnalytics?.severity?.low ?? stats.low}
+                                    color="#22c55e"
+                                />
+
+                                <MiniSeverityCard
+                                    title="Info"
+                                    value={stats.info}
+                                    color="#38bdf8"
+                                />
+                            </div>
+                        </Panel>
+
+                        <div style={{ marginTop: "18px" }}>
+                            <Panel title="🧠 System Intelligence">
+                                <div
+                                    style={{
+                                        display: "grid",
+                                        gridTemplateColumns: "repeat(3, 1fr)",
+                                        gap: "12px",
+                                    }}
+                                >
+                                    <InfoTile
+                                        title="Risk Level"
+                                        value={
+                                            stats.highPriorityCount > 0
+                                                ? "Elevated"
+                                                : "Normal"
+                                        }
+                                        color={
+                                            stats.highPriorityCount > 0
+                                                ? "#f59e0b"
+                                                : "#22c55e"
+                                        }
+                                    />
+
+                                    <InfoTile
+                                        title="Evidence Mode"
+                                        value="Snapshots"
+                                        color="#38bdf8"
+                                    />
+
+                                    <InfoTile
+                                        title="Backend Analytics"
+                                        value={backendAnalytics ? "Synced" : "Loading"}
+                                        color={backendAnalytics ? "#22c55e" : "#f59e0b"}
+                                    />
+                                </div>
+                            </Panel>
+                        </div>
+                    </div>
+
+                    <Panel title="🚨 Live Alert Feed">
+                        <div
+                            className="scroll-soft"
+                            style={{
+                                maxHeight: "830px",
+                                overflowY: "auto",
+                                paddingRight: "4px",
+                            }}
+                        >
+                            {events.length === 0 ? (
+                                <EmptyState />
+                            ) : (
+                                events.map((event, index) => (
+                                    <AlertCard
+                                        key={`${event.db_id || event.type}-${index}`}
+                                        event={event}
+                                        index={index}
+                                        getSeverityColor={getSeverityColor}
+                                        getEventIcon={getEventIcon}
+                                    />
+                                ))
+                            )}
+                        </div>
+                    </Panel>
+                </div>
+            </main>
         </div>
     )
 }
@@ -960,7 +1016,7 @@ function LoginScreen({
         <div
             style={{
                 minHeight: "100vh",
-                background: "#020617",
+                background: "radial-gradient(circle at top, #0f172a, #020617 55%)",
                 color: "white",
                 display: "flex",
                 alignItems: "center",
@@ -973,82 +1029,53 @@ function LoginScreen({
                 onSubmit={onSubmit}
                 style={{
                     width: "100%",
-                    maxWidth: "420px",
-                    background: "#0f172a",
+                    maxWidth: "430px",
+                    background: "rgba(15, 23, 42, 0.95)",
                     border: "1px solid #1e293b",
-                    borderRadius: "20px",
-                    padding: "28px",
-                    boxShadow: "0 0 30px rgba(56, 189, 248, 0.12)",
+                    borderRadius: "24px",
+                    padding: "30px",
+                    boxShadow: "0 0 40px rgba(14, 165, 233, 0.16)",
                 }}
             >
-                <div style={{ marginBottom: "24px" }}>
-                    <h1 style={{ margin: 0, fontSize: "30px" }}>🛡️ SurakshaNet AI</h1>
+                <div style={{ marginBottom: "24px", textAlign: "center" }}>
+                    <div
+                        style={{
+                            width: "58px",
+                            height: "58px",
+                            borderRadius: "18px",
+                            background: "linear-gradient(135deg, #0ea5e9, #1d4ed8)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            margin: "0 auto 14px",
+                            fontSize: "30px",
+                        }}
+                    >
+                        🛡️
+                    </div>
+
+                    <h1 style={{ margin: 0, fontSize: "30px" }}>SurakshaNet AI</h1>
 
                     <p style={{ color: "#94a3b8", marginTop: "8px" }}>
-                        Secure Dashboard Login
+                        Secure Command Dashboard
                     </p>
                 </div>
 
-                <label style={{ display: "block", marginBottom: "14px" }}>
-                    <div
-                        style={{
-                            color: "#94a3b8",
-                            marginBottom: "6px",
-                            fontSize: "13px",
-                            fontWeight: "bold",
-                        }}
-                    >
-                        Username
-                    </div>
+                <LoginInput
+                    label="Username"
+                    value={username}
+                    onChange={onUsernameChange}
+                    placeholder="admin"
+                    type="text"
+                />
 
-                    <input
-                        value={username}
-                        onChange={(e) => onUsernameChange(e.target.value)}
-                        placeholder="admin"
-                        autoComplete="username"
-                        style={{
-                            width: "100%",
-                            boxSizing: "border-box",
-                            background: "#111827",
-                            color: "white",
-                            border: "1px solid #334155",
-                            borderRadius: "10px",
-                            padding: "12px",
-                            fontWeight: "bold",
-                        }}
-                    />
-                </label>
-
-                <label style={{ display: "block", marginBottom: "16px" }}>
-                    <div
-                        style={{
-                            color: "#94a3b8",
-                            marginBottom: "6px",
-                            fontSize: "13px",
-                            fontWeight: "bold",
-                        }}
-                    >
-                        Password
-                    </div>
-
-                    <input
-                        type="password"
-                        value={password}
-                        onChange={(e) => onPasswordChange(e.target.value)}
-                        placeholder="admin123"
-                        autoComplete="current-password"
-                        style={{
-                            width: "100%",
-                            boxSizing: "border-box",
-                            background: "#111827",
-                            color: "white",
-                            border: "1px solid #334155",
-                            borderRadius: "10px",
-                            padding: "12px",
-                            fontWeight: "bold",
-                        }}
-                    />
-                </label>
+                <LoginInput
+                    label="Password"
+                    value={password}
+                    onChange={onPasswordChange}
+                    placeholder="admin123"
+                    type="password"
+                />
 
                 {error && (
                     <div
@@ -1089,11 +1116,135 @@ function LoginScreen({
                         fontSize: "12px",
                         marginTop: "16px",
                         lineHeight: 1.5,
+                        textAlign: "center",
                     }}
                 >
                     Demo credentials: admin / admin123
                 </div>
             </form>
+        </div>
+    )
+}
+
+function LoginInput({ label, value, onChange, placeholder, type }) {
+    return (
+        <label style={{ display: "block", marginBottom: "14px" }}>
+            <div
+                style={{
+                    color: "#94a3b8",
+                    marginBottom: "6px",
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                }}
+            >
+                {label}
+            </div>
+
+            <input
+                type={type}
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                autoComplete={type === "password" ? "current-password" : "username"}
+                style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    background: "#111827",
+                    color: "white",
+                    border: "1px solid #334155",
+                    borderRadius: "10px",
+                    padding: "12px",
+                    fontWeight: "bold",
+                }}
+            />
+        </label>
+    )
+}
+
+function SidebarItem({ icon, label, active }) {
+    return (
+        <div
+            style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                padding: "11px 12px",
+                borderRadius: "12px",
+                marginBottom: "7px",
+                color: active ? "#e0f2fe" : "#94a3b8",
+                background: active ? "rgba(14, 165, 233, 0.14)" : "transparent",
+                border: active ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
+                fontWeight: active ? "bold" : "normal",
+            }}
+        >
+            <span>{icon}</span>
+            <span>{label}</span>
+        </div>
+    )
+}
+
+function Panel({ title, children, compact }) {
+    return (
+        <section
+            style={{
+                background: "#0f172a",
+                border: "1px solid #1e293b",
+                borderRadius: "18px",
+                padding: compact ? "14px" : "16px",
+                marginBottom: compact ? "18px" : 0,
+            }}
+        >
+            {title && (
+                <h2
+                    style={{
+                        marginTop: 0,
+                        marginBottom: "14px",
+                        fontSize: "18px",
+                    }}
+                >
+                    {title}
+                </h2>
+            )}
+
+            {children}
+        </section>
+    )
+}
+
+function StatusPill({ label, color }) {
+    return (
+        <div
+            style={{
+                background: "#0f172a",
+                border: `1px solid ${color}`,
+                color,
+                padding: "10px 12px",
+                borderRadius: "999px",
+                fontWeight: "bold",
+                fontSize: "13px",
+                whiteSpace: "nowrap",
+            }}
+        >
+            <span style={{ animation: "liveDot 1s infinite" }}>●</span> {label}
+        </div>
+    )
+}
+
+function OperatorStatus({ label, value, color }) {
+    return (
+        <div
+            style={{
+                background: "#0f172a",
+                border: "1px solid #1e293b",
+                borderRadius: "16px",
+                padding: "14px",
+            }}
+        >
+            <div style={{ color: "#64748b", fontSize: "12px", marginBottom: "6px" }}>
+                {label}
+            </div>
+
+            <div style={{ color, fontSize: "17px", fontWeight: "bold" }}>{value}</div>
         </div>
     )
 }
@@ -1135,15 +1286,34 @@ function FilterSelect({ label, value, onChange, options }) {
     )
 }
 
+function ActionButton({ label, color, onClick }) {
+    return (
+        <button
+            onClick={onClick}
+            style={{
+                background: color,
+                color: "white",
+                border: "1px solid rgba(255,255,255,0.18)",
+                borderRadius: "10px",
+                padding: "12px 14px",
+                fontWeight: "bold",
+                whiteSpace: "nowrap",
+            }}
+        >
+            {label}
+        </button>
+    )
+}
+
 function AnalyticsCard({ title, value, subtitle, color }) {
     return (
         <div
             style={{
                 background: "#0f172a",
                 border: `1px solid ${color}`,
-                borderRadius: "16px",
+                borderRadius: "18px",
                 padding: "16px",
-                minHeight: "110px",
+                minHeight: "112px",
             }}
         >
             <div
@@ -1224,11 +1394,11 @@ function StatCard({ title, value, color }) {
             style={{
                 background: "#0f172a",
                 padding: "16px",
-                borderRadius: "15px",
-                border: `2px solid ${color}`,
+                borderRadius: "18px",
+                border: `1px solid ${color}`,
             }}
         >
-            <div style={{ color: "#94a3b8", marginBottom: "8px", fontSize: "14px" }}>
+            <div style={{ color: "#94a3b8", marginBottom: "8px", fontSize: "13px" }}>
                 {title}
             </div>
 
@@ -1243,7 +1413,7 @@ function MiniSeverityCard({ title, value, color }) {
             style={{
                 background: "#111827",
                 border: `1px solid ${color}`,
-                borderRadius: "12px",
+                borderRadius: "14px",
                 padding: "12px",
             }}
         >
@@ -1251,6 +1421,66 @@ function MiniSeverityCard({ title, value, color }) {
 
             <div style={{ color, fontSize: "24px", fontWeight: "bold", marginTop: "4px" }}>
                 {value}
+            </div>
+        </div>
+    )
+}
+
+function InfoTile({ title, value, color }) {
+    return (
+        <div
+            style={{
+                background: "#111827",
+                border: "1px solid #1e293b",
+                borderRadius: "14px",
+                padding: "14px",
+            }}
+        >
+            <div style={{ color: "#64748b", fontSize: "12px", marginBottom: "6px" }}>
+                {title}
+            </div>
+
+            <div style={{ color, fontSize: "18px", fontWeight: "bold" }}>{value}</div>
+        </div>
+    )
+}
+
+function Badge({ label, color }) {
+    return (
+        <span
+            style={{
+                color,
+                background: `${color}22`,
+                border: `1px solid ${color}`,
+                padding: "5px 9px",
+                borderRadius: "999px",
+                fontSize: "11px",
+                fontWeight: "bold",
+            }}
+        >
+            {label}
+        </span>
+    )
+}
+
+function EmptyState() {
+    return (
+        <div
+            style={{
+                color: "#94a3b8",
+                background: "#111827",
+                border: "1px dashed #334155",
+                padding: "22px",
+                borderRadius: "14px",
+                textAlign: "center",
+            }}
+        >
+            <div style={{ fontSize: "28px", marginBottom: "8px" }}>📡</div>
+            <div style={{ fontWeight: "bold", color: "#cbd5e1" }}>
+                No alerts match current filters.
+            </div>
+            <div style={{ fontSize: "13px", marginTop: "6px" }}>
+                Trigger a test alert or wait for a live camera event.
             </div>
         </div>
     )
@@ -1265,9 +1495,9 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
             style={{
                 background: "#111827",
                 borderLeft: `6px solid ${color}`,
-                padding: "13px",
+                padding: "14px",
                 marginBottom: "12px",
-                borderRadius: "12px",
+                borderRadius: "14px",
                 animation: index === 0 ? "newCardGlow 0.5s ease-out" : "none",
             }}
         >
@@ -1277,36 +1507,21 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                     justifyContent: "space-between",
                     gap: "10px",
                     alignItems: "center",
-                    marginBottom: "8px",
+                    marginBottom: "10px",
                 }}
             >
                 <div style={{ fontWeight: "bold", color, fontSize: "16px" }}>
                     {getEventIcon(event.type)} {event.type}
                 </div>
 
-                <span
-                    style={{
-                        background: `${color}22`,
-                        color,
-                        border: `1px solid ${color}`,
-                        padding: "4px 8px",
-                        borderRadius: "999px",
-                        fontSize: "11px",
-                        fontWeight: "bold",
-                    }}
-                >
-                    {severity}
-                </span>
+                <Badge label={severity} color={color} />
             </div>
 
             {event.message && (
-                <div style={{ color: "#e5e7eb", marginBottom: "8px", fontSize: "14px" }}>
+                <div style={{ color: "#e5e7eb", marginBottom: "10px", fontSize: "14px" }}>
                     {event.message}
                 </div>
             )}
-
-            {/* 🟢 CHANGED: Display alert snapshot */}
-            {/* REASON: Operator should review captured evidence image for each alert */}
 
             {event.snapshot_url && (
                 <div style={{ marginBottom: "10px" }}>
@@ -1340,9 +1555,6 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                 </div>
             )}
 
-            {/* 🟢 CHANGED: Display alert video clip */}
-            {/* REASON: Operator should review short recorded evidence clip for each alert */}
-
             {event.clip_url && (
                 <div style={{ marginBottom: "10px" }}>
                     <video
@@ -1375,29 +1587,17 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                 </div>
             )}
 
-            <div style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.6 }}>
+            <div style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.65 }}>
                 {event.db_id !== undefined && <div>🗃 DB ID: {event.db_id}</div>}
-
                 {event.object_id !== undefined && <div>👤 Object ID: {event.object_id}</div>}
-
                 {event.zone && <div>📍 Zone: {event.zone}</div>}
-
                 {event.camera_id && <div>📷 Camera ID: {event.camera_id}</div>}
-
                 {event.camera_name && <div>🎥 Camera: {event.camera_name}</div>}
-
                 {event.camera_location && <div>🗺 Location: {event.camera_location}</div>}
-
                 {event.timestamp && <div>⏱ Event Time: {event.timestamp}</div>}
-
                 {event.person_count !== undefined && <div>👥 Person Count: {event.person_count}</div>}
-
                 {event.duration_seconds !== undefined && <div>⏱ Duration: {event.duration_seconds}s</div>}
-
                 {event.class && <div>🧠 Class: {event.class}</div>}
-
-                {/* 🟢 CHANGED: Safe confidence display */}
-                {/* REASON: Old DB events may have null/string confidence and toFixed() can crash dashboard */}
 
                 {event.confidence !== undefined &&
                     event.confidence !== null &&
@@ -1405,6 +1605,8 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                         <div>🎯 Confidence: {Number(event.confidence).toFixed(2)}</div>
                     )}
 
+                {event.recording_skipped && <div>⚡ Recording skipped: cooldown active</div>}
+                {event.clip_skipped && <div>🎞 Clip skipped: performance mode</div>}
                 {event.created_at && <div>🕒 Time: {event.created_at}</div>}
             </div>
         </div>
