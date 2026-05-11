@@ -4,21 +4,23 @@ import time
 
 class EventEngine:
     """
-    SurakshaNet AI — Final Event Engine V3
+    SurakshaNet AI — Event Engine V3.1
 
     Purpose:
-    Convert tracked person objects into meaningful security events.
+    Convert stable tracked person objects into meaningful security events.
 
-    Handles:
+    Final MVP behavior:
     - Intrusion detection with duration confirmation
     - Loitering detection with stationary behavior analysis
     - Zone-based crowd detection with duration confirmation
+    - Zone-specific severity
+    - Dynamic confidence scoring
+    - Severity escalation
     - Cooldown / deduplication
     - Stale track cleanup
-    - Clean event messages for dashboard and reports
 
-    Final MVP Decision:
-    - PPE logic is intentionally excluded.
+    Final MVP exclusions:
+    - PPE detection is excluded.
     - Weapon detection is disabled by default because the MVP does not include
       a reliable custom weapon model.
     """
@@ -28,64 +30,82 @@ class EventEngine:
         self.alert = AlertDispatcher()
 
         # --------------------------------------------------
-        # Global cooldown
+        # Final MVP tuning
         # --------------------------------------------------
-        # Prevents repeated alert spam for the same person/zone/type.
+        # These values are demo-friendly but still realistic enough to avoid
+        # instant/fake-looking alerts.
 
         self.cooldown_seconds = 12
+
+        self.intrusion_confirm_seconds = 1.2
+        self.intrusion_critical_seconds = 8
+
+        self.loiter_seconds = 8
+        self.loiter_high_seconds = 20
+        self.loiter_movement_threshold = 90
+        self.loiter_jitter_threshold = 20
+
+        self.crowd_threshold = 3
+        self.crowd_critical_threshold = 5
+        self.crowd_confirm_seconds = 2.0
+        self.crowd_critical_seconds = 6.0
+
+        # Ignore weak/unstable tracks.
+        # YOLOv8n usually gives person confidence above this when detection is stable.
+        self.min_track_confidence = 0.35
+
+        # --------------------------------------------------
+        # Runtime state
+        # --------------------------------------------------
+
         self.last_alert_time = {}
 
-        # --------------------------------------------------
-        # Intrusion V3 settings
-        # --------------------------------------------------
-        # A person must remain inside a restricted zone for a short time
-        # before an intrusion alert is emitted.
-
         self.intrusion_start_time = {}
-        self.intrusion_confirm_seconds = 1.5
-
-        # --------------------------------------------------
-        # Loitering V3 settings
-        # --------------------------------------------------
-        # A person must remain near the same anchor position for a duration.
-        # Small movement caused by camera jitter is ignored.
 
         self.loiter_start_time = {}
         self.loiter_anchor_position = {}
         self.loiter_last_position = {}
 
-        self.loiter_seconds = 15
-        self.loiter_movement_threshold = 80
-        self.loiter_jitter_threshold = 18
-
-        # --------------------------------------------------
-        # Crowd V3 settings
-        # --------------------------------------------------
-        # Crowd is based on stable tracked people inside a zone for duration.
-
-        self.crowd_threshold = 3
-        self.crowd_confirm_seconds = 2.5
         self.crowd_start_time = {}
         self.crowd_last_count = {}
+
+        self.last_seen_time = {}
+        self.track_stale_seconds = 20
+
+        # --------------------------------------------------
+        # Zone-specific severity behavior
+        # --------------------------------------------------
+        # If your pipeline sets zones:
+        # [
+        #   {"name": "Main Gate", "box": (...)},
+        #   {"name": "Server Room", "box": (...)}
+        # ]
+        #
+        # Server Room is treated as more sensitive than Main Gate.
+
+        self.zone_severity_overrides = {
+            "Server Room": {
+                "intrusion": "CRITICAL",
+                "loitering": "HIGH",
+                "crowd": "CRITICAL",
+            },
+            "Main Gate": {
+                "intrusion": "HIGH",
+                "loitering": "MEDIUM",
+                "crowd": "HIGH",
+            },
+        }
 
         # --------------------------------------------------
         # Weapon hook
         # --------------------------------------------------
-        # Kept as a future hook only.
-        # Disabled by default for final MVP because YOLOv8n is not a weapon model.
+        # Disabled by default for final MVP.
 
         self.enable_weapon_detection = False
         self.weapon_classes = {"knife", "gun", "weapon", "pistol", "rifle"}
         self.weapon_confidence_threshold = 0.55
         self.weapon_seen_count = {}
         self.weapon_required_hits = 2
-
-        # --------------------------------------------------
-        # Track memory cleanup
-        # --------------------------------------------------
-
-        self.last_seen_time = {}
-        self.track_stale_seconds = 20
 
     # --------------------------------------------------
     # Public API
@@ -108,18 +128,17 @@ class EventEngine:
         """
         Main event processing function.
 
-        Inputs:
-        tracked_objects:
+        tracked_objects input:
         [
             {"id": 1, "bbox": [x1, y1, x2, y2], "conf": 0.82}
         ]
 
-        detections:
+        detections input:
         [
             {"bbox": [x1, y1, x2, y2], "conf": 0.82, "class": "person"}
         ]
 
-        Returns:
+        returns:
         [
             {
                 "type": "INTRUSION",
@@ -147,14 +166,12 @@ class EventEngine:
         # --------------------------------------------------
 
         for obj in tracked_objects:
-            if not obj or "bbox" not in obj or "id" not in obj:
+            if not self.is_valid_track(obj):
                 continue
 
             obj_id = obj["id"]
             bbox = self.normalize_bbox(obj["bbox"])
-
-            if not bbox:
-                continue
+            track_conf = float(obj.get("conf", 0) or 0)
 
             active_ids.add(obj_id)
             self.last_seen_time[obj_id] = current_time
@@ -172,6 +189,7 @@ class EventEngine:
                     obj_id=obj_id,
                     bbox=bbox,
                     zone_name=zone_name,
+                    track_conf=track_conf,
                     current_time=current_time,
                 )
 
@@ -185,6 +203,7 @@ class EventEngine:
                 bbox=bbox,
                 center=center,
                 current_zone=current_zone,
+                track_conf=track_conf,
                 current_time=current_time,
             )
 
@@ -207,14 +226,12 @@ class EventEngine:
         # --------------------------------------------------
         # 3. Optional weapon hook
         # --------------------------------------------------
-        # Disabled by default for final MVP.
 
         if self.enable_weapon_detection:
-            weapon_events = self.check_weapon(detections)
-            events.extend(weapon_events)
+            events.extend(self.check_weapon(detections))
 
         # --------------------------------------------------
-        # 4. Cleanup stale memory
+        # 4. Cleanup
         # --------------------------------------------------
 
         self.cleanup_stale_tracks(active_ids, current_time)
@@ -230,15 +247,41 @@ class EventEngine:
         return events
 
     # --------------------------------------------------
-    # Intrusion V3
+    # Track validation
     # --------------------------------------------------
 
-    def check_intrusion(self, obj_id, bbox, zone_name, current_time):
+    def is_valid_track(self, obj):
+        """
+        Reject weak or malformed tracks before behavior logic.
+
+        This reduces false behavior alerts caused by unstable detections.
+        """
+
+        if not obj or "bbox" not in obj or "id" not in obj:
+            return False
+
+        bbox = self.normalize_bbox(obj.get("bbox"))
+
+        if not bbox:
+            return False
+
+        conf = float(obj.get("conf", 0) or 0)
+
+        if conf < self.min_track_confidence:
+            return False
+
+        return True
+
+    # --------------------------------------------------
+    # Intrusion V3.1
+    # --------------------------------------------------
+
+    def check_intrusion(self, obj_id, bbox, zone_name, track_conf, current_time):
         """
         Intrusion rule:
-        - Person center must be inside a restricted zone.
-        - Same person must remain inside for intrusion_confirm_seconds.
-        - Cooldown prevents repeated alerts.
+        - Person center must remain inside a restricted zone.
+        - Alert triggers only after intrusion_confirm_seconds.
+        - Severity can escalate based on zone and duration.
         """
 
         intrusion_key = f"{obj_id}:{zone_name}"
@@ -256,9 +299,20 @@ class EventEngine:
         if not self.can_emit(alert_key):
             return None
 
+        severity = self.get_zone_severity(zone_name, "intrusion", default="HIGH")
+
+        if intrusion_duration >= self.intrusion_critical_seconds:
+            severity = "CRITICAL"
+
+        confidence = self.compute_behavior_confidence(
+            duration=intrusion_duration,
+            required_duration=self.intrusion_confirm_seconds,
+            track_conf=track_conf,
+        )
+
         return self.make_event(
             event_type="INTRUSION",
-            severity="HIGH",
+            severity=severity,
             object_id=obj_id,
             zone=zone_name,
             bbox=bbox,
@@ -268,22 +322,31 @@ class EventEngine:
             ),
             extra={
                 "duration_seconds": round(intrusion_duration, 1),
-                "rule": "intrusion_duration_v3",
-                "confidence": 1.0,
+                "confidence": confidence,
+                "track_confidence": round(track_conf, 3),
+                "rule": "intrusion_duration_v3_1",
             },
         )
 
     # --------------------------------------------------
-    # Loitering V3
+    # Loitering V3.1
     # --------------------------------------------------
 
-    def check_loitering(self, obj_id, bbox, center, current_zone, current_time):
+    def check_loitering(
+        self,
+        obj_id,
+        bbox,
+        center,
+        current_zone,
+        track_conf,
+        current_time,
+    ):
         """
         Loitering rule:
         - Person must stay near the same anchor location.
-        - Large movement resets the timer.
-        - Small jitter does not reset the timer.
-        - Alert fires after loiter_seconds.
+        - Big movement resets the timer.
+        - Small bbox jitter is tolerated.
+        - Severity can escalate based on duration and zone.
         """
 
         if obj_id not in self.loiter_anchor_position:
@@ -300,14 +363,14 @@ class EventEngine:
 
         self.loiter_last_position[obj_id] = center
 
-        # If the person clearly moved away from the loitering area, reset.
+        # Clear movement away from area resets loitering timer.
         if distance_from_anchor > self.loiter_movement_threshold:
             self.loiter_anchor_position[obj_id] = center
             self.loiter_start_time[obj_id] = current_time
             return None
 
-        # If only small jitter happened, keep the timer running.
-        # This helps avoid false resets caused by bbox vibration.
+        # Small movement is treated as normal camera/detection jitter.
+        # No timer reset needed.
         if frame_to_frame_distance <= self.loiter_jitter_threshold:
             pass
 
@@ -322,9 +385,20 @@ class EventEngine:
         if not self.can_emit(alert_key):
             return None
 
+        severity = self.get_zone_severity(zone_name, "loitering", default="MEDIUM")
+
+        if loiter_duration >= self.loiter_high_seconds:
+            severity = "HIGH"
+
+        confidence = self.compute_behavior_confidence(
+            duration=loiter_duration,
+            required_duration=self.loiter_seconds,
+            track_conf=track_conf,
+        )
+
         return self.make_event(
             event_type="LOITERING",
-            severity="MEDIUM",
+            severity=severity,
             object_id=obj_id,
             zone=zone_name,
             bbox=bbox,
@@ -335,13 +409,14 @@ class EventEngine:
             extra={
                 "duration_seconds": int(loiter_duration),
                 "movement_distance": round(distance_from_anchor, 2),
-                "rule": "loitering_stationary_v3",
-                "confidence": 1.0,
+                "confidence": confidence,
+                "track_confidence": round(track_conf, 3),
+                "rule": "loitering_stationary_v3_1",
             },
         )
 
     # --------------------------------------------------
-    # Crowd V3
+    # Crowd V3.1
     # --------------------------------------------------
 
     def check_crowd(
@@ -353,10 +428,10 @@ class EventEngine:
     ):
         """
         Crowd rule:
-        - Count stable tracked people.
-        - If zones exist, crowd is zone-based.
-        - If no zones exist, fallback to full camera view.
+        - Crowd detection is zone-based if zones exist.
+        - Otherwise it falls back to the full camera view.
         - Count must remain above threshold for crowd_confirm_seconds.
+        - Severity escalates for higher count or longer crowd duration.
         """
 
         events = []
@@ -376,12 +451,13 @@ class EventEngine:
                 if event:
                     events.append(event)
         else:
-            total_count = len(tracked_objects)
+            valid_tracks = [obj for obj in tracked_objects if self.is_valid_track(obj)]
+            total_count = len(valid_tracks)
 
             event = self.check_crowd_for_area(
                 area_name="Camera View",
                 count=total_count,
-                object_ids=[obj.get("id") for obj in tracked_objects if "id" in obj],
+                object_ids=[obj.get("id") for obj in valid_tracks if "id" in obj],
                 current_time=current_time,
             )
 
@@ -392,7 +468,7 @@ class EventEngine:
 
     def check_crowd_for_area(self, area_name, count, object_ids, current_time):
         """
-        Helper for crowd detection in one zone/camera area.
+        Crowd detection for a single area.
         """
 
         if count < self.crowd_threshold:
@@ -415,9 +491,22 @@ class EventEngine:
         if not self.can_emit(alert_key):
             return None
 
+        severity = self.get_zone_severity(area_name, "crowd", default="HIGH")
+
+        if (
+            count >= self.crowd_critical_threshold
+            or crowd_duration >= self.crowd_critical_seconds
+        ):
+            severity = "CRITICAL"
+
+        confidence = self.compute_crowd_confidence(
+            count=count,
+            duration=crowd_duration,
+        )
+
         return self.make_event(
             event_type="CROWD_ALERT",
-            severity="HIGH",
+            severity=severity,
             zone=area_name,
             message=(
                 f"{count} people remained inside {area_name} "
@@ -427,8 +516,8 @@ class EventEngine:
                 "person_count": count,
                 "object_ids": object_ids,
                 "duration_seconds": round(crowd_duration, 1),
-                "rule": "crowd_duration_v3",
-                "confidence": 1.0,
+                "confidence": confidence,
+                "rule": "crowd_duration_v3_1",
             },
         )
 
@@ -440,8 +529,8 @@ class EventEngine:
         """
         Optional weapon hook.
 
-        This is disabled by default in final MVP because YOLOv8n is not a
-        reliable weapon detector. Keep this only for future custom model use.
+        Disabled by default in final MVP because YOLOv8n is not a reliable
+        weapon detector. This function is kept only for future custom model use.
         """
 
         events = []
@@ -483,8 +572,8 @@ class EventEngine:
                     message=f"Potential weapon detected: {cls} ({conf:.2f})",
                     extra={
                         "class": cls,
-                        "confidence": conf,
-                        "rule": "weapon_confidence_multiframe_hook_v3",
+                        "confidence": round(conf, 3),
+                        "rule": "weapon_confidence_multiframe_hook_v3_1",
                     },
                 )
             )
@@ -495,7 +584,50 @@ class EventEngine:
         return events
 
     # --------------------------------------------------
-    # Utility helpers
+    # Severity / confidence helpers
+    # --------------------------------------------------
+
+    def get_zone_severity(self, zone_name, event_kind, default):
+        """
+        Return configured severity for a zone/event kind if available.
+        """
+
+        zone_rules = self.zone_severity_overrides.get(zone_name, {})
+
+        return zone_rules.get(event_kind, default)
+
+    def compute_behavior_confidence(self, duration, required_duration, track_conf):
+        """
+        Compute confidence based on:
+        - how long the behavior continued
+        - track confidence from detector/tracker
+
+        Result is capped between 0.0 and 1.0.
+        """
+
+        if required_duration <= 0:
+            duration_score = 1.0
+        else:
+            duration_score = min(1.0, duration / max(required_duration * 2, 0.01))
+
+        combined = (duration_score * 0.6) + (track_conf * 0.4)
+
+        return round(max(0.0, min(1.0, combined)), 3)
+
+    def compute_crowd_confidence(self, count, duration):
+        """
+        Compute crowd confidence based on count and duration.
+        """
+
+        count_score = min(1.0, count / max(self.crowd_critical_threshold, 1))
+        duration_score = min(1.0, duration / max(self.crowd_confirm_seconds * 2, 0.01))
+
+        combined = (count_score * 0.55) + (duration_score * 0.45)
+
+        return round(max(0.0, min(1.0, combined)), 3)
+
+    # --------------------------------------------------
+    # Core utility helpers
     # --------------------------------------------------
 
     def can_emit(self, key):
@@ -523,7 +655,7 @@ class EventEngine:
         extra=None,
     ):
         """
-        Create a dashboard/backend-compatible event object.
+        Create backend/dashboard-compatible event object.
         """
 
         event = {
@@ -611,7 +743,7 @@ class EventEngine:
 
     def cleanup_stale_tracks(self, active_ids, current_time):
         """
-        Remove old track memory for objects that disappeared.
+        Remove old track memory for disappeared objects.
         """
 
         stale_ids = []
