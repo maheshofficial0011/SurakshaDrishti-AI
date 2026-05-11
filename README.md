@@ -149,6 +149,40 @@ SurakshaNet-AI/
 
 ---
 
+## Screenshots
+
+### Login Screen
+
+![Login Screen](docs/screenshots/01_login_screen.png)
+
+### Command Dashboard
+
+![Dashboard Home](docs/screenshots/02_dashboard_home.png)
+
+### Live Feed and Alerts
+
+![Live Feed and Alerts](docs/screenshots/03_live_feed_alerts.png)
+
+### Test Alert
+
+![Test Alert](docs/screenshots/04_test_alert.png)
+
+### Snapshot Evidence
+
+![Snapshot Alert](docs/screenshots/05_snapshot_alert.png)
+
+### Analytics and Reports
+
+![Analytics and Reports](docs/screenshots/06_analytics_report.png)
+
+### Settings Panel
+
+![Settings Panel](docs/screenshots/07_settings_panel.png)
+
+---
+
+---
+
 ## Setup Instructions
 
 ### 1. Clone or open project
