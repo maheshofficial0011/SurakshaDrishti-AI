@@ -57,3 +57,32 @@ async def delete_events():
     clear_events()
 
     return {"status": "events cleared"}
+
+
+# 🟢 CHANGED: Added manual demo/test alert endpoint
+# REASON: Helps verify dashboard, websocket, database, and alert flow without camera movement
+
+
+@router.post("/events/test")
+async def create_test_event():
+    test_event = {
+        "type": "INTRUSION",
+        "severity": "HIGH",
+        "message": "Manual test intrusion alert generated from backend",
+        "object_id": 999,
+        "zone": "Demo Zone",
+        "camera_id": "CAM-TEST",
+        "camera_name": "Demo Test Camera",
+        "camera_location": "Demo Area",
+    }
+
+    event_id = save_event(test_event)
+
+    test_event["db_id"] = event_id
+
+    await broadcast_event(test_event)
+
+    return {
+        "status": "test event generated",
+        "event": test_event,
+    }

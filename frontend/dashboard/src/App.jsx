@@ -5,6 +5,12 @@ export default function App() {
     const [connectionStatus, setConnectionStatus] = useState("CONNECTING")
     const [latestToast, setLatestToast] = useState(null)
 
+    // 🟢 CHANGED: Added backend health/loading states
+    // REASON: Dashboard should clearly show backend availability during demos
+
+    const [backendStatus, setBackendStatus] = useState("CHECKING")
+    const [lastError, setLastError] = useState("")
+
     // 🟢 CHANGED: Added backend analytics state
     // REASON: Dashboard should sync summary data from backend analytics APIs
 
@@ -27,6 +33,23 @@ export default function App() {
         )
     }, [])
 
+    async function checkBackendHealth() {
+        try {
+            const response = await fetch("http://127.0.0.1:8000/health")
+
+            if (!response.ok) {
+                throw new Error("Backend health check failed")
+            }
+
+            setBackendStatus("ONLINE")
+            setLastError("")
+        } catch (err) {
+            console.error("Backend health error:", err)
+            setBackendStatus("OFFLINE")
+            setLastError("Backend is offline or not reachable")
+        }
+    }
+
     async function loadEventHistory() {
         try {
             const params = new URLSearchParams()
@@ -45,11 +68,17 @@ export default function App() {
                 `http://127.0.0.1:8000/events?${params.toString()}`
             )
 
+            if (!response.ok) {
+                throw new Error("Failed to fetch event history")
+            }
+
             const data = await response.json()
 
             setEvents(data.events || [])
+            setLastError("")
         } catch (err) {
             console.error("Failed to load event history:", err)
+            setLastError("Could not load event history")
         }
     }
 
@@ -61,6 +90,10 @@ export default function App() {
                 fetch("http://127.0.0.1:8000/analytics/risk-zones"),
             ])
 
+            if (!summaryRes.ok || !typeRes.ok || !zonesRes.ok) {
+                throw new Error("Failed to fetch backend analytics")
+            }
+
             const summaryData = await summaryRes.json()
             const typeData = await typeRes.json()
             const zonesData = await zonesRes.json()
@@ -68,22 +101,30 @@ export default function App() {
             setBackendAnalytics(summaryData)
             setAnalyticsByType(typeData.items || [])
             setRiskZones(zonesData.items || [])
+            setLastError("")
         } catch (err) {
             console.error("Failed to load backend analytics:", err)
+            setLastError("Could not load backend analytics")
         }
     }
 
     async function clearEventHistory() {
         try {
-            await fetch("http://127.0.0.1:8000/events", {
+            const response = await fetch("http://127.0.0.1:8000/events", {
                 method: "DELETE",
             })
 
+            if (!response.ok) {
+                throw new Error("Failed to clear events")
+            }
+
             setEvents([])
             setLatestToast(null)
-            loadBackendAnalytics()
+            await loadBackendAnalytics()
+            setLastError("")
         } catch (err) {
             console.error("Failed to clear events:", err)
+            setLastError("Could not clear event history")
         }
     }
 
@@ -111,7 +152,33 @@ export default function App() {
         window.open(url, "_blank")
     }
 
+    // 🟢 CHANGED: Added manual test alert trigger
+    // REASON: Allows demo/testing without camera event being triggered
+
+    async function triggerTestAlert() {
+        try {
+            const response = await fetch("http://127.0.0.1:8000/events/test", {
+                method: "POST",
+            })
+
+            if (!response.ok) {
+                throw new Error("Failed to trigger test alert")
+            }
+
+            await loadEventHistory()
+            await loadBackendAnalytics()
+            setLastError("")
+        } catch (err) {
+            console.error("Failed to trigger test alert:", err)
+            setLastError("Could not trigger test alert")
+        }
+    }
+
     useEffect(() => {
+        // 🟢 CHANGED: Check backend health with every dashboard refresh/filter change
+        // REASON: Operator should know if backend APIs are online
+
+        checkBackendHealth()
         loadEventHistory()
         loadBackendAnalytics()
     }, [typeFilter, severityFilter, limitFilter])
@@ -176,6 +243,7 @@ export default function App() {
 
         ws.onerror = () => {
             setConnectionStatus("ERROR")
+            setLastError("WebSocket connection error")
         }
 
         ws.onclose = () => {
@@ -275,8 +343,14 @@ export default function App() {
     }
 
     function getStatusColor() {
-        if (connectionStatus === "CONNECTED") return "#22c55e"
-        if (connectionStatus === "CONNECTING") return "#f59e0b"
+        if (connectionStatus === "CONNECTED" && backendStatus === "ONLINE") {
+            return "#22c55e"
+        }
+
+        if (connectionStatus === "CONNECTING" || backendStatus === "CHECKING") {
+            return "#f59e0b"
+        }
+
         return "#ef4444"
     }
 
@@ -368,9 +442,28 @@ export default function App() {
                     }}
                 >
                     <span style={{ animation: "liveDot 1s infinite" }}>●</span>{" "}
-                    {connectionStatus}
+                    WS: {connectionStatus} | API: {backendStatus}
                 </div>
             </div>
+
+            {/* 🟢 CHANGED: Operator error banner */}
+            {/* REASON: Show backend/API/WebSocket problems clearly instead of silent failure */}
+
+            {lastError && (
+                <div
+                    style={{
+                        background: "#7f1d1d",
+                        border: "1px solid #ef4444",
+                        color: "#fee2e2",
+                        padding: "12px 16px",
+                        borderRadius: "12px",
+                        marginBottom: "20px",
+                        fontWeight: "bold",
+                    }}
+                >
+                    ⚠ {lastError}
+                </div>
+            )}
 
             {/* FILTER BAR */}
 
@@ -382,7 +475,7 @@ export default function App() {
                     padding: "16px",
                     marginBottom: "20px",
                     display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr auto auto auto auto auto",
+                    gridTemplateColumns: "1fr 1fr 1fr auto auto auto auto auto auto",
                     gap: "12px",
                     alignItems: "end",
                 }}
@@ -440,6 +533,20 @@ export default function App() {
                     }}
                 >
                     🔄 Refresh
+                </button>
+
+                <button
+                    onClick={triggerTestAlert}
+                    style={{
+                        background: "#92400e",
+                        color: "white",
+                        border: "1px solid #f59e0b",
+                        borderRadius: "10px",
+                        padding: "12px 14px",
+                        fontWeight: "bold",
+                    }}
+                >
+                    🧪 Test Alert
                 </button>
 
                 <button
