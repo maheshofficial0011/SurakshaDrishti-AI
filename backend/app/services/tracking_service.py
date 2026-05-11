@@ -1,36 +1,53 @@
-# 🟢 CHANGED: Import actual tracker implementation
-# REASON: tracker.py contains ByteTrackCore class
+# 🟢 CHANGED: Stable tracking service
+# REASON: Use Tracking Stability V2 tracker with cleaner person filtering
 
-from tracking.bytetrack.tracker import ByteTrackCore
+from tracking.bytetrack.tracker import Tracker
 
 
 class TrackingService:
-    """
-    Converts detection → tracked objects for backend use
-    """
-
     def __init__(self):
-
-        # 🟢 CHANGED: Initialize real ByteTrackCore tracker
-        # REASON: Align tracking service with actual tracker class
-
-        self.tracker = ByteTrackCore()
+        self.tracker = Tracker(
+            iou_threshold=0.35,
+            center_distance_threshold=120,
+            max_missed=10,
+            min_hits=3,
+        )
 
     def process(self, detections):
         """
-        detections from YOLO → tracking output
+        Expected detection format:
+        [
+            {
+                "bbox": [x1, y1, x2, y2],
+                "conf": 0.82,
+                "class": "person"
+            }
+        ]
         """
 
-        tracked = self.tracker.update(detections)
+        detections = detections or []
 
-        result = []
+        # Track ONLY persons
+        person_detections = []
 
-        for track_id, data in tracked.items():
+        for det in detections:
+            cls = det.get("class", "").lower()
 
-            x1, y1, x2, y2 = data["bbox"]
+            if cls != "person":
+                continue
 
-            result.append(
-                {"id": track_id, "bbox": [x1, y1, x2, y2], "conf": data["conf"]}
+            bbox = det.get("bbox")
+
+            if not bbox or len(bbox) != 4:
+                continue
+
+            person_detections.append(
+                {
+                    "bbox": [int(v) for v in bbox],
+                    "conf": float(det.get("conf", 0.0)),
+                }
             )
 
-        return result
+        tracked_objects = self.tracker.update(person_detections)
+
+        return tracked_objects
