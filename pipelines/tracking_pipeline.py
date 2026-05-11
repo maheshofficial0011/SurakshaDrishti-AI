@@ -1,5 +1,5 @@
-# 🟢 CHANGED: Performance-stabilized tracking pipeline
-# REASON: Reduce dashboard lag by throttling detection, stream upload, and recording
+# 🟢 CHANGED: Strong performance tracking pipeline
+# REASON: Reduce dashboard lag by throttling detection, stream upload, and video recording
 
 import os
 import sys
@@ -10,6 +10,7 @@ import imageio.v2 as imageio
 from datetime import datetime
 from pathlib import Path
 from collections import deque
+from threading import Thread
 
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
@@ -33,7 +34,7 @@ CAMERA_LOCATION = "Main Gate"
 
 
 # 🟢 CHANGED: Recording directories
-# REASON: Store snapshots and short video clips as alert evidence
+# REASON: Store snapshots and optional video clips as alert evidence
 
 RECORDINGS_DIR = Path("recordings")
 
@@ -44,20 +45,26 @@ CLIPS_DIR = RECORDINGS_DIR / "clips"
 CLIPS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-# 🟢 CHANGED: Shorter clip settings
-# REASON: Long clips increase CPU load and dashboard delay
+# 🟢 CHANGED: Strong performance mode
+# REASON: Reduce CPU load and dashboard delay on laptop
 
-CLIP_FPS = 6
+CLIP_FPS = 5
 CLIP_SECONDS = 2
 FRAME_BUFFER_SIZE = CLIP_FPS * CLIP_SECONDS
 
-
-# 🟢 CHANGED: Performance throttle settings
-# REASON: Prevent lag by reducing backend frame upload, AI inference load, and recording spam
-
-DETECTION_EVERY_N_FRAMES = 5
+DETECTION_EVERY_N_FRAMES = 6
 STREAM_EVERY_N_FRAMES = 3
-RECORDING_COOLDOWN_SECONDS = 8
+RECORDING_COOLDOWN_SECONDS = 15
+
+# 🟢 CHANGED: Video clips disabled by default for smooth live demo
+# REASON: MP4 writing is CPU-heavy; snapshots remain enabled
+
+ENABLE_VIDEO_CLIPS = False
+
+# 🟢 CHANGED: Toggle drawing non-person objects
+# REASON: Drawing many object boxes can add overhead
+
+DRAW_NON_PERSON_OBJECTS = True
 
 
 def enrich_event_metadata(event):
@@ -73,14 +80,14 @@ def enrich_event_metadata(event):
 
 
 def send_event_to_backend(event):
-    # 🟢 CHANGED: Send event to FastAPI backend
-    # REASON: Backend stores event, broadcasts websocket alert, and updates dashboard
-
-    print("📡 Sending event to backend:", event)
+    # 🟢 CHANGED: Reduced backend logging
+    # REASON: Excessive terminal printing slows realtime pipeline
 
     try:
         response = requests.post(BACKEND_EVENTS_URL, json=event, timeout=1)
-        print("✅ Backend response:", response.status_code)
+
+        if response.status_code >= 400:
+            print("⚠ Backend response:", response.status_code)
 
     except Exception as e:
         print("⚠ Backend API error:", e)
@@ -88,7 +95,7 @@ def send_event_to_backend(event):
 
 def save_event_snapshot(frame, event):
     # 🟢 CHANGED: Save event snapshot image
-    # REASON: Alerts should include visual evidence for dashboard review
+    # REASON: Alerts should include lightweight visual evidence for dashboard review
 
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -110,12 +117,12 @@ def save_event_snapshot(frame, event):
         return event
 
 
-def save_event_clip(frame_buffer, event):
+def save_event_clip(frame_buffer_snapshot, event):
     # 🟢 CHANGED: Save browser-compatible alert video clip
     # REASON: imageio/libx264 creates browser-playable MP4 clips
 
     try:
-        if not frame_buffer:
+        if not frame_buffer_snapshot:
             return event
 
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
@@ -127,7 +134,7 @@ def save_event_clip(frame_buffer, event):
 
         rgb_frames = []
 
-        for buffered_frame in frame_buffer:
+        for buffered_frame in frame_buffer_snapshot:
             rgb_frame = cv2.cvtColor(buffered_frame, cv2.COLOR_BGR2RGB)
             rgb_frames.append(rgb_frame)
 
@@ -136,7 +143,7 @@ def save_event_clip(frame_buffer, event):
             rgb_frames,
             fps=CLIP_FPS,
             codec="libx264",
-            quality=7,
+            quality=6,
             macro_block_size=16,
         )
 
@@ -150,18 +157,32 @@ def save_event_clip(frame_buffer, event):
         return event
 
 
+def save_event_clip_background(frame_buffer_snapshot, event):
+    # 🟢 CHANGED: Save clip in background thread
+    # REASON: Prevent MP4 writing from blocking live camera loop
+
+    try:
+        save_event_clip(frame_buffer_snapshot, event)
+    except Exception as e:
+        print("⚠ Background clip save error:", e)
+
+
 def send_frame_to_backend(frame):
     # 🟢 CHANGED: Send annotated frame to backend stream
     # REASON: Dashboard displays live AI feed through backend
 
     try:
-        _, buffer = cv2.imencode(".jpg", frame)
+        _, buffer = cv2.imencode(
+            ".jpg",
+            frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), 70],
+        )
 
         requests.post(
             BACKEND_FRAME_URL,
             data=buffer.tobytes(),
             headers={"Content-Type": "image/jpeg"},
-            timeout=0.5,
+            timeout=0.35,
         )
 
     except Exception as e:
@@ -174,6 +195,12 @@ def open_camera(max_index=5):
 
         if cap.isOpened():
             print("Camera opened at index:", i)
+
+            # 🟢 CHANGED: Reduce camera buffer
+            # REASON: Helps reduce live feed latency on some webcams
+
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+
             return cap
 
         cap.release()
@@ -182,8 +209,11 @@ def open_camera(max_index=5):
 
 
 def draw_detections(frame, detections):
-    # 🟢 CHANGED: Draw non-person detections
-    # REASON: Objects are visible, but only persons receive tracking IDs
+    # 🟢 CHANGED: Draw non-person detections only when enabled
+    # REASON: Allows performance mode without losing person tracking
+
+    if not DRAW_NON_PERSON_OBJECTS:
+        return
 
     for det in detections:
         cls_name = det.get("class", "unknown")
@@ -248,6 +278,19 @@ def should_record_event(event, last_recording_time):
     return False
 
 
+def should_save_video_clip(event):
+    # 🟢 CHANGED: Save video only when enabled and for important alerts
+    # REASON: Video encoding is heavy and should not run for every event
+
+    if not ENABLE_VIDEO_CLIPS:
+        return False
+
+    return (
+        event.get("severity") in ["HIGH", "CRITICAL"]
+        or event.get("type") == "INTRUSION"
+    )
+
+
 def main():
     detector = Detector()
     tracker_service = TrackingService()
@@ -266,15 +309,18 @@ def main():
         print("❌ Camera not opening")
         return
 
-    window_name = "SurakshaNet AI - Optimized Tracking"
+    window_name = "SurakshaNet AI - Strong Performance Mode"
 
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 800, 600)
 
-    print("SurakshaNet AI - Performance Optimized Pipeline Active")
+    print("SurakshaNet AI - Strong Performance Pipeline Active")
+    print(f"Detection every {DETECTION_EVERY_N_FRAMES} frames")
+    print(f"Stream every {STREAM_EVERY_N_FRAMES} frames")
+    print(f"Video clips enabled: {ENABLE_VIDEO_CLIPS}")
 
-    # 🟢 CHANGED: Rolling frame buffer for alert video clips
-    # REASON: Keep recent frames so alerts can save short evidence video
+    # 🟢 CHANGED: Rolling frame buffer for optional alert video clips
+    # REASON: Keep recent frames so clips can be saved if enabled
 
     frame_buffer = deque(maxlen=FRAME_BUFFER_SIZE)
 
@@ -297,10 +343,11 @@ def main():
 
         frame = cv2.resize(frame, (640, 480))
 
-        # 🟢 CHANGED: Store recent frame in rolling buffer
-        # REASON: Buffered frames are used for short alert video clips
+        # 🟢 CHANGED: Store recent frame only if clips are enabled
+        # REASON: Avoid unnecessary memory copy overhead when video is off
 
-        frame_buffer.append(frame.copy())
+        if ENABLE_VIDEO_CLIPS:
+            frame_buffer.append(frame.copy())
 
         # 🟢 CHANGED: Run detection every N frames
         # REASON: YOLO is expensive; reusing recent detections reduces lag
@@ -330,11 +377,26 @@ def main():
             event = enrich_event_metadata(event)
 
             if should_record_event(event, last_recording_time):
-                # 🟢 CHANGED: Save evidence only after cooldown
-                # REASON: Prevent heavy recording work on every repeated alert
+                # 🟢 CHANGED: Always save snapshot after cooldown
+                # REASON: Snapshot is lightweight evidence and useful for dashboard
 
                 event = save_event_snapshot(frame, event)
-                event = save_event_clip(frame_buffer, event)
+
+                if should_save_video_clip(event):
+                    # 🟢 CHANGED: Save video in background
+                    # REASON: Avoid blocking live camera and dashboard stream
+
+                    frame_buffer_snapshot = list(frame_buffer)
+
+                    event["clip_pending"] = True
+
+                    Thread(
+                        target=save_event_clip_background,
+                        args=(frame_buffer_snapshot, event.copy()),
+                        daemon=True,
+                    ).start()
+                else:
+                    event["clip_skipped"] = True
             else:
                 # 🟢 CHANGED: Mark repeated event as lightweight
                 # REASON: Repeated alerts should not overload recording system
