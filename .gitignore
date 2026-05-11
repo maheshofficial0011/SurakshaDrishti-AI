@@ -1,42 +1,29 @@
-# Python
+# Secrets
+.env
+
+# Python environment
+venv/
 __pycache__/
 *.pyc
-*.pyo
-*.pyd
-venv/
-.env
 
 # Node
 node_modules/
 dist/
-build/
 
-# Database
-database/*.db
-database/*.sqlite
-database/*.sqlite3
-
-# Logs
-*.log
-logs/
-
-# Model files
+# AI model files
 *.pt
 *.onnx
 *.engine
 models/
 
-# OS / IDE
-.DS_Store
-.vscode/
-.idea/
+# Runtime data
+recordings/
+database/*.db
+database/*.sqlite
+database/*.sqlite3
 
-# Media / test files
-data/raw/
-data/videos/
+# Large media
 *.mp4
 *.avi
 *.mov
 *.mkv
-# Recordings / alert evidence
-recordings/
