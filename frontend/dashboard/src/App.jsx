@@ -5,6 +5,18 @@ export default function App() {
     const [connectionStatus, setConnectionStatus] = useState("CONNECTING")
     const [latestToast, setLatestToast] = useState(null)
 
+    // 🟢 CHANGED: Added dashboard login state
+    // REASON: Protect dashboard with basic demo-level authentication
+
+    const [authToken, setAuthToken] = useState(
+        localStorage.getItem("surakshanet_token") || ""
+    )
+
+    const [loginUsername, setLoginUsername] = useState("")
+    const [loginPassword, setLoginPassword] = useState("")
+    const [loginError, setLoginError] = useState("")
+    const isAuthenticated = Boolean(authToken)
+
     // 🟢 CHANGED: Added backend health/loading states
     // REASON: Dashboard should clearly show backend availability during demos
 
@@ -26,6 +38,53 @@ export default function App() {
     const [limitFilter, setLimitFilter] = useState(100)
 
     const audioRef = useRef(null)
+
+    // 🟢 CHANGED: Added login handler
+    // REASON: Authenticate user before showing dashboard
+
+    async function handleLogin(event) {
+        event.preventDefault()
+
+        try {
+            setLoginError("")
+
+            const response = await fetch("http://127.0.0.1:8000/auth/login", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    username: loginUsername,
+                    password: loginPassword,
+                }),
+            })
+
+            if (!response.ok) {
+                throw new Error("Invalid username or password")
+            }
+
+            const data = await response.json()
+
+            localStorage.setItem("surakshanet_token", data.token)
+            setAuthToken(data.token)
+            setLoginPassword("")
+        } catch (err) {
+            console.error("Login failed:", err)
+            setLoginError("Invalid username or password")
+        }
+    }
+
+    // 🟢 CHANGED: Added logout handler
+    // REASON: Allow operator to exit dashboard session
+
+    function handleLogout() {
+        localStorage.removeItem("surakshanet_token")
+        setAuthToken("")
+        setEvents([])
+        setLatestToast(null)
+        setConnectionStatus("CONNECTING")
+        setBackendStatus("CHECKING")
+    }
 
     useEffect(() => {
         audioRef.current = new Audio(
@@ -175,15 +234,20 @@ export default function App() {
     }
 
     useEffect(() => {
-        // 🟢 CHANGED: Check backend health with every dashboard refresh/filter change
-        // REASON: Operator should know if backend APIs are online
+        if (!isAuthenticated) {
+            return
+        }
 
         checkBackendHealth()
         loadEventHistory()
         loadBackendAnalytics()
-    }, [typeFilter, severityFilter, limitFilter])
+    }, [isAuthenticated, typeFilter, severityFilter, limitFilter])
 
     useEffect(() => {
+        if (!isAuthenticated) {
+            return
+        }
+
         const ws = new WebSocket("ws://127.0.0.1:8000/ws/events")
 
         ws.onopen = () => {
@@ -252,7 +316,7 @@ export default function App() {
         }
 
         return () => ws.close()
-    }, [typeFilter, severityFilter, limitFilter])
+    }, [isAuthenticated, typeFilter, severityFilter, limitFilter])
 
     const stats = useMemo(() => {
         let intrusion = 0
@@ -358,6 +422,19 @@ export default function App() {
         (e) => e.severity === "CRITICAL" || e.severity === "HIGH"
     )
 
+    if (!isAuthenticated) {
+        return (
+            <LoginScreen
+                username={loginUsername}
+                password={loginPassword}
+                error={loginError}
+                onUsernameChange={setLoginUsername}
+                onPasswordChange={setLoginPassword}
+                onSubmit={handleLogin}
+            />
+        )
+    }
+
     return (
         <div
             style={{
@@ -421,6 +498,7 @@ export default function App() {
                     justifyContent: "space-between",
                     alignItems: "center",
                     marginBottom: "20px",
+                    gap: "16px",
                 }}
             >
                 <div>
@@ -431,23 +509,39 @@ export default function App() {
                     </p>
                 </div>
 
-                <div
-                    style={{
-                        background: "#0f172a",
-                        padding: "12px 20px",
-                        borderRadius: "12px",
-                        border: `1px solid ${getStatusColor()}`,
-                        color: getStatusColor(),
-                        fontWeight: "bold",
-                    }}
-                >
-                    <span style={{ animation: "liveDot 1s infinite" }}>●</span>{" "}
-                    WS: {connectionStatus} | API: {backendStatus}
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div
+                        style={{
+                            background: "#0f172a",
+                            padding: "12px 20px",
+                            borderRadius: "12px",
+                            border: `1px solid ${getStatusColor()}`,
+                            color: getStatusColor(),
+                            fontWeight: "bold",
+                            whiteSpace: "nowrap",
+                        }}
+                    >
+                        <span style={{ animation: "liveDot 1s infinite" }}>●</span>{" "}
+                        WS: {connectionStatus} | API: {backendStatus}
+                    </div>
+
+                    <button
+                        onClick={handleLogout}
+                        style={{
+                            background: "#7f1d1d",
+                            color: "white",
+                            border: "1px solid #ef4444",
+                            borderRadius: "12px",
+                            padding: "12px 16px",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        Logout
+                    </button>
                 </div>
             </div>
 
-            {/* 🟢 CHANGED: Operator error banner */}
-            {/* REASON: Show backend/API/WebSocket problems clearly instead of silent failure */}
+            {/* OPERATOR ERROR BANNER */}
 
             {lastError && (
                 <div
@@ -810,11 +904,7 @@ export default function App() {
                             color="#22c55e"
                         />
 
-                        <MiniSeverityCard
-                            title="Info"
-                            value={stats.info}
-                            color="#38bdf8"
-                        />
+                        <MiniSeverityCard title="Info" value={stats.info} color="#38bdf8" />
                     </div>
                 </div>
 
@@ -854,6 +944,156 @@ export default function App() {
                     )}
                 </div>
             </div>
+        </div>
+    )
+}
+
+function LoginScreen({
+    username,
+    password,
+    error,
+    onUsernameChange,
+    onPasswordChange,
+    onSubmit,
+}) {
+    return (
+        <div
+            style={{
+                minHeight: "100vh",
+                background: "#020617",
+                color: "white",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: "Arial, sans-serif",
+                padding: "20px",
+            }}
+        >
+            <form
+                onSubmit={onSubmit}
+                style={{
+                    width: "100%",
+                    maxWidth: "420px",
+                    background: "#0f172a",
+                    border: "1px solid #1e293b",
+                    borderRadius: "20px",
+                    padding: "28px",
+                    boxShadow: "0 0 30px rgba(56, 189, 248, 0.12)",
+                }}
+            >
+                <div style={{ marginBottom: "24px" }}>
+                    <h1 style={{ margin: 0, fontSize: "30px" }}>🛡️ SurakshaNet AI</h1>
+
+                    <p style={{ color: "#94a3b8", marginTop: "8px" }}>
+                        Secure Dashboard Login
+                    </p>
+                </div>
+
+                <label style={{ display: "block", marginBottom: "14px" }}>
+                    <div
+                        style={{
+                            color: "#94a3b8",
+                            marginBottom: "6px",
+                            fontSize: "13px",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        Username
+                    </div>
+
+                    <input
+                        value={username}
+                        onChange={(e) => onUsernameChange(e.target.value)}
+                        placeholder="admin"
+                        autoComplete="username"
+                        style={{
+                            width: "100%",
+                            boxSizing: "border-box",
+                            background: "#111827",
+                            color: "white",
+                            border: "1px solid #334155",
+                            borderRadius: "10px",
+                            padding: "12px",
+                            fontWeight: "bold",
+                        }}
+                    />
+                </label>
+
+                <label style={{ display: "block", marginBottom: "16px" }}>
+                    <div
+                        style={{
+                            color: "#94a3b8",
+                            marginBottom: "6px",
+                            fontSize: "13px",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        Password
+                    </div>
+
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => onPasswordChange(e.target.value)}
+                        placeholder="admin123"
+                        autoComplete="current-password"
+                        style={{
+                            width: "100%",
+                            boxSizing: "border-box",
+                            background: "#111827",
+                            color: "white",
+                            border: "1px solid #334155",
+                            borderRadius: "10px",
+                            padding: "12px",
+                            fontWeight: "bold",
+                        }}
+                    />
+                </label>
+
+                {error && (
+                    <div
+                        style={{
+                            background: "#7f1d1d",
+                            border: "1px solid #ef4444",
+                            color: "#fee2e2",
+                            padding: "10px 12px",
+                            borderRadius: "10px",
+                            marginBottom: "16px",
+                            fontWeight: "bold",
+                            fontSize: "14px",
+                        }}
+                    >
+                        ⚠ {error}
+                    </div>
+                )}
+
+                <button
+                    type="submit"
+                    style={{
+                        width: "100%",
+                        background: "#2563eb",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "12px",
+                        padding: "13px",
+                        fontWeight: "bold",
+                        fontSize: "16px",
+                    }}
+                >
+                    Login
+                </button>
+
+                <div
+                    style={{
+                        color: "#64748b",
+                        fontSize: "12px",
+                        marginTop: "16px",
+                        lineHeight: 1.5,
+                    }}
+                >
+                    Demo credentials: admin / admin123
+                </div>
+            </form>
         </div>
     )
 }
@@ -1064,6 +1304,7 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                     {event.message}
                 </div>
             )}
+
             {/* 🟢 CHANGED: Display alert snapshot */}
             {/* REASON: Operator should review captured evidence image for each alert */}
 
