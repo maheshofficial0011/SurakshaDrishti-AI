@@ -1,15 +1,12 @@
-# 🟢 CHANGED: Clean Phase 6.2 tracking pipeline
-# REASON: Sends events to FastAPI backend and tracks only persons
+# 🟢 CHANGED: Performance-stabilized tracking pipeline
+# REASON: Reduce dashboard lag by throttling detection, stream upload, and recording
 
 import os
 import sys
 import cv2
 import requests
-
-# 🟢 CHANGED: Added browser-compatible video writer
-# REASON: OpenCV mp4v clips may not play in browser video tag
-
 import imageio.v2 as imageio
+
 from datetime import datetime
 from pathlib import Path
 from collections import deque
@@ -26,8 +23,17 @@ from ai_engine.inference.detector import Detector
 BACKEND_EVENTS_URL = "http://127.0.0.1:8000/events"
 BACKEND_FRAME_URL = "http://127.0.0.1:8000/frame"
 
-# 🟢 CHANGED: Added alert recording directories
-# REASON: Store both image snapshots and short video clips as evidence
+
+# 🟢 CHANGED: Camera metadata
+# REASON: Events and reports need camera identity/location
+
+CAMERA_ID = "CAM-01"
+CAMERA_NAME = "Main Gate Camera"
+CAMERA_LOCATION = "Main Gate"
+
+
+# 🟢 CHANGED: Recording directories
+# REASON: Store snapshots and short video clips as alert evidence
 
 RECORDINGS_DIR = Path("recordings")
 
@@ -37,25 +43,27 @@ SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 CLIPS_DIR = RECORDINGS_DIR / "clips"
 CLIPS_DIR.mkdir(parents=True, exist_ok=True)
 
-# 🟢 CHANGED: Added rolling video buffer settings
-# REASON: Save recent frames around alert events
 
-CLIP_FPS = 10
-CLIP_SECONDS = 5
+# 🟢 CHANGED: Shorter clip settings
+# REASON: Long clips increase CPU load and dashboard delay
+
+CLIP_FPS = 6
+CLIP_SECONDS = 2
 FRAME_BUFFER_SIZE = CLIP_FPS * CLIP_SECONDS
-# 🟢 CHANGED: Added camera metadata
-# REASON: Events and reports need camera identity/location
-
-CAMERA_ID = "CAM-01"
-CAMERA_NAME = "Main Gate Camera"
-CAMERA_LOCATION = "Main Gate"
 
 
-# 🟢 CHANGED: Add camera/timestamp metadata to each event
-# REASON: Reports and analytics need source camera information
+# 🟢 CHANGED: Performance throttle settings
+# REASON: Prevent lag by reducing backend frame upload, AI inference load, and recording spam
+
+DETECTION_EVERY_N_FRAMES = 5
+STREAM_EVERY_N_FRAMES = 3
+RECORDING_COOLDOWN_SECONDS = 8
 
 
 def enrich_event_metadata(event):
+    # 🟢 CHANGED: Add camera/timestamp metadata
+    # REASON: Reports and analytics need source camera information
+
     event["camera_id"] = CAMERA_ID
     event["camera_name"] = CAMERA_NAME
     event["camera_location"] = CAMERA_LOCATION
@@ -64,28 +72,24 @@ def enrich_event_metadata(event):
     return event
 
 
-# 🟢 CHANGED: Added backend debug logging
-# REASON: Verify events are successfully reaching FastAPI backend
 def send_event_to_backend(event):
+    # 🟢 CHANGED: Send event to FastAPI backend
+    # REASON: Backend stores event, broadcasts websocket alert, and updates dashboard
 
     print("📡 Sending event to backend:", event)
 
     try:
-
         response = requests.post(BACKEND_EVENTS_URL, json=event, timeout=1)
-
         print("✅ Backend response:", response.status_code)
 
     except Exception as e:
-
         print("⚠ Backend API error:", e)
 
 
-# 🟢 CHANGED: Save event snapshot image
-# REASON: Alerts should include visual evidence for dashboard playback/review
-
-
 def save_event_snapshot(frame, event):
+    # 🟢 CHANGED: Save event snapshot image
+    # REASON: Alerts should include visual evidence for dashboard review
+
     try:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
         event_type = event.get("type", "EVENT")
@@ -106,18 +110,10 @@ def save_event_snapshot(frame, event):
         return event
 
 
-# 🟢 CHANGED: Send annotated frame to backend
-# REASON: Enable live dashboard camera stream
-
-# 🟢 CHANGED: Save short alert video clip
-# REASON: Alerts should include playable video evidence, not only snapshot image
-
-
-# 🟢 CHANGED: Save browser-compatible alert video clip
-# REASON: OpenCV mp4v MP4 files may show in dashboard but not play in browser
-
-
 def save_event_clip(frame_buffer, event):
+    # 🟢 CHANGED: Save browser-compatible alert video clip
+    # REASON: imageio/libx264 creates browser-playable MP4 clips
+
     try:
         if not frame_buffer:
             return event
@@ -129,17 +125,11 @@ def save_event_clip(frame_buffer, event):
         filename = f"{camera_id}_{event_type}_{timestamp}.mp4"
         file_path = CLIPS_DIR / filename
 
-        # 🟢 CHANGED: Convert OpenCV BGR frames to RGB for imageio
-        # REASON: imageio expects RGB frames for correct browser playback
-
         rgb_frames = []
 
         for buffered_frame in frame_buffer:
             rgb_frame = cv2.cvtColor(buffered_frame, cv2.COLOR_BGR2RGB)
             rgb_frames.append(rgb_frame)
-
-        # 🟢 CHANGED: Use imageio ffmpeg writer
-        # REASON: Produces browser-playable MP4 more reliably than cv2.VideoWriter
 
         imageio.mimsave(
             str(file_path),
@@ -161,6 +151,9 @@ def save_event_clip(frame_buffer, event):
 
 
 def send_frame_to_backend(frame):
+    # 🟢 CHANGED: Send annotated frame to backend stream
+    # REASON: Dashboard displays live AI feed through backend
+
     try:
         _, buffer = cv2.imencode(".jpg", frame)
 
@@ -175,19 +168,6 @@ def send_frame_to_backend(frame):
         print("⚠ Frame stream error:", e)
 
 
-# 🟢 CHANGED: Add camera/timestamp metadata to each event
-# REASON: Reports and analytics need source camera information
-
-
-def enrich_event_metadata(event):
-    event["camera_id"] = CAMERA_ID
-    event["camera_name"] = CAMERA_NAME
-    event["camera_location"] = CAMERA_LOCATION
-    event["timestamp"] = datetime.now().isoformat()
-
-    return event
-
-
 def open_camera(max_index=5):
     for i in range(max_index):
         cap = cv2.VideoCapture(i, cv2.CAP_DSHOW)
@@ -199,6 +179,73 @@ def open_camera(max_index=5):
         cap.release()
 
     return None
+
+
+def draw_detections(frame, detections):
+    # 🟢 CHANGED: Draw non-person detections
+    # REASON: Objects are visible, but only persons receive tracking IDs
+
+    for det in detections:
+        cls_name = det.get("class", "unknown")
+        conf = det.get("conf", 0)
+
+        if cls_name.lower() == "person":
+            continue
+
+        x1, y1, x2, y2 = det["bbox"]
+
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 200, 0), 2)
+
+        cv2.putText(
+            frame,
+            f"{cls_name} {conf:.2f}",
+            (x1, y1 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (255, 200, 0),
+            2,
+        )
+
+
+def draw_tracked_objects(frame, tracked_objects):
+    # 🟢 CHANGED: Draw tracked persons with IDs
+    # REASON: Only persons should receive persistent tracking IDs
+
+    for obj in tracked_objects:
+        x1, y1, x2, y2 = obj["bbox"]
+        obj_id = obj["id"]
+
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        cv2.putText(
+            frame,
+            f"PERSON ID {obj_id}",
+            (x1, y1 - 10),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            (0, 255, 0),
+            2,
+        )
+
+
+def should_record_event(event, last_recording_time):
+    # 🟢 CHANGED: Recording cooldown check
+    # REASON: Prevent snapshot/video spam for same repeated event
+
+    event_key = (
+        f"{event.get('type')}_"
+        f"{event.get('object_id', 'none')}_"
+        f"{event.get('zone', 'none')}"
+    )
+
+    now_ts = datetime.now().timestamp()
+    last_ts = last_recording_time.get(event_key, 0)
+
+    if (now_ts - last_ts) >= RECORDING_COOLDOWN_SECONDS:
+        last_recording_time[event_key] = now_ts
+        return True
+
+    return False
 
 
 def main():
@@ -219,16 +266,25 @@ def main():
         print("❌ Camera not opening")
         return
 
-    window_name = "SurakshaNet AI - Phase 6.2 Tracking"
+    window_name = "SurakshaNet AI - Optimized Tracking"
 
     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window_name, 800, 600)
 
-    print("SurakshaNet AI - Phase 6.2 Live Backend Integration Active")
+    print("SurakshaNet AI - Performance Optimized Pipeline Active")
+
     # 🟢 CHANGED: Rolling frame buffer for alert video clips
     # REASON: Keep recent frames so alerts can save short evidence video
 
     frame_buffer = deque(maxlen=FRAME_BUFFER_SIZE)
+
+    # 🟢 CHANGED: Runtime performance state
+    # REASON: Throttle expensive operations to keep dashboard responsive
+
+    frame_count = 0
+    last_recording_time = {}
+    last_detections = []
+    last_tracked_objects = []
 
     while True:
         ret, frame = cap.read()
@@ -237,100 +293,64 @@ def main():
             print("❌ Frame not received")
             continue
 
+        frame_count += 1
+
         frame = cv2.resize(frame, (640, 480))
-        # 🟢 CHANGED: Store frame in rolling buffer
-        # REASON: Recent frames are used to generate alert video clips
+
+        # 🟢 CHANGED: Store recent frame in rolling buffer
+        # REASON: Buffered frames are used for short alert video clips
 
         frame_buffer.append(frame.copy())
 
-        # 🟢 CHANGED: Use unified detector
-        # REASON: Detection source for person tracking + weapon/PPE checks
-        detections = detector.detect(frame)
+        # 🟢 CHANGED: Run detection every N frames
+        # REASON: YOLO is expensive; reusing recent detections reduces lag
 
-        # 🟢 CHANGED: Track only person objects
-        # REASON: Chairs, bottles, mobiles should not receive tracking IDs
-        person_detections = [
-            det for det in detections if det.get("class", "").lower() == "person"
-        ]
+        if frame_count % DETECTION_EVERY_N_FRAMES == 0:
+            detections = detector.detect(frame)
 
-        tracked_objects = tracker_service.process(person_detections)
+            person_detections = [
+                det for det in detections if det.get("class", "").lower() == "person"
+            ]
+
+            tracked_objects = tracker_service.process(person_detections)
+
+            last_detections = detections
+            last_tracked_objects = tracked_objects
+        else:
+            detections = last_detections
+            tracked_objects = last_tracked_objects
 
         # Keep all detections for weapon/PPE event checks
         events = engine.process(tracked_objects, detections)
 
-        # 🟢 CHANGED: Draw all detected objects
-        # REASON: Show chair, bottle, mobile, etc. visually
+        draw_detections(frame, detections)
+        draw_tracked_objects(frame, tracked_objects)
 
-        for det in detections:
-
-            cls_name = det.get("class", "unknown")
-
-            conf = det.get("conf", 0)
-
-            x1, y1, x2, y2 = det["bbox"]
-
-            # Skip person here because person is drawn separately with tracking ID
-            if cls_name.lower() == "person":
-                continue
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (255, 200, 0), 2)
-
-            cv2.putText(
-                frame,
-                f"{cls_name} {conf:.2f}",
-                (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (255, 200, 0),
-                2,
-            )
-
-        # 🟢 CHANGED: Draw tracked persons with IDs
-        # REASON: Only persons should receive tracking IDs
-
-        for obj in tracked_objects:
-
-            x1, y1, x2, y2 = obj["bbox"]
-
-            obj_id = obj["id"]
-
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-
-            cv2.putText(
-                frame,
-                f"PERSON ID {obj_id}",
-                (x1, y1 - 10),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.6,
-                (0, 255, 0),
-                2,
-            )
-
-        # Send events to backend
         for event in events:
-
-            # 🟢 CHANGED: Attach camera + timestamp metadata
-            # REASON: Backend, dashboard, and reports need event source info
-
             event = enrich_event_metadata(event)
 
-            # 🟢 CHANGED: Save snapshot for each event
-            # REASON: Dashboard playback needs visual evidence
+            if should_record_event(event, last_recording_time):
+                # 🟢 CHANGED: Save evidence only after cooldown
+                # REASON: Prevent heavy recording work on every repeated alert
 
-            event = save_event_snapshot(frame, event)
+                event = save_event_snapshot(frame, event)
+                event = save_event_clip(frame_buffer, event)
+            else:
+                # 🟢 CHANGED: Mark repeated event as lightweight
+                # REASON: Repeated alerts should not overload recording system
 
-            # 🟢 CHANGED: Save alert video clip for each event
-            # REASON: Alerts should include playable video evidence, not only snapshot image
-
-            event = save_event_clip(frame_buffer, event)
+                event["recording_skipped"] = True
 
             print("🚨 EVENT:", event)
 
             send_event_to_backend(event)
 
-        # 🟢 CHANGED: Send annotated camera frame to backend stream
-        # REASON: Dashboard can display live AI feed
-        send_frame_to_backend(frame)
+        # 🟢 CHANGED: Throttle live stream frame upload
+        # REASON: Sending every frame overloads backend and causes dashboard lag
+
+        if frame_count % STREAM_EVERY_N_FRAMES == 0:
+            send_frame_to_backend(frame)
+
         cv2.imshow(window_name, frame)
 
         key = cv2.waitKey(1)
