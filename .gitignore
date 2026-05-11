@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.env
+
+# Node
+node_modules/
+dist/
+build/
+
+# Database
+database/*.db
+database/*.sqlite
+database/*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Model files
+*.pt
+*.onnx
+*.engine
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+
+# Media / test files
+data/raw/
+data/videos/
+*.mp4
+*.avi
+*.mov
+*.mkv

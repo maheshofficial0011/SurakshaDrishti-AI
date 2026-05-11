@@ -1,0 +1,31 @@
+# -----------------------------
+# Backend API
+# -----------------------------
+fastapi
+uvicorn
+
+# -----------------------------
+# AI / Computer Vision
+# -----------------------------
+ultralytics
+opencv-python
+numpy
+
+# -----------------------------
+# Torch (YOLO Dependency)
+# -----------------------------
+torch
+torchvision
+torchaudio
+
+# -----------------------------
+# Utilities
+# -----------------------------
+pydantic
+python-dotenv
+
+# -----------------------------
+# Future Expansion
+# -----------------------------
+websockets
+requests
