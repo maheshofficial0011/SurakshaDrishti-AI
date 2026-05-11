@@ -4,6 +4,26 @@ SurakshaNet AI is a real-time AI surveillance prototype with live camera streami
 
 ---
 
+## Demo Guide
+
+For presentation/demo instructions, see:
+
+```text
+docs/demo_guide.md
+```
+
+The demo guide includes:
+
+- exact run order
+- demo flow
+- test alert instructions
+- snapshot verification
+- export/report demo
+- troubleshooting checklist
+- final demo checklist
+
+---
+
 ## Current Working Features
 
 - Live webcam feed
