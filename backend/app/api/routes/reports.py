@@ -81,6 +81,8 @@ async def export_events_csv(
         "confidence",
         "bbox",
         "created_at",
+        "snapshot_url",
+        "snapshot_file",
     ]
 
     writer = csv.DictWriter(output, fieldnames=fieldnames)

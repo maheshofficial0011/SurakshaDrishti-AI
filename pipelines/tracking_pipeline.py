@@ -6,6 +6,7 @@ import sys
 import cv2
 import requests
 from datetime import datetime
+from pathlib import Path
 
 os.environ["OPENCV_VIDEOIO_PRIORITY_MSMF"] = "0"
 
@@ -18,6 +19,13 @@ from ai_engine.inference.detector import Detector
 
 BACKEND_EVENTS_URL = "http://127.0.0.1:8000/events"
 BACKEND_FRAME_URL = "http://127.0.0.1:8000/frame"
+
+# 🟢 CHANGED: Added alert snapshot recording directory
+# REASON: Save evidence image when event is generated
+
+RECORDINGS_DIR = Path("recordings")
+SNAPSHOTS_DIR = RECORDINGS_DIR / "snapshots"
+SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
 # 🟢 CHANGED: Added camera metadata
 # REASON: Events and reports need camera identity/location
 
@@ -54,6 +62,31 @@ def send_event_to_backend(event):
     except Exception as e:
 
         print("⚠ Backend API error:", e)
+
+
+# 🟢 CHANGED: Save event snapshot image
+# REASON: Alerts should include visual evidence for dashboard playback/review
+
+
+def save_event_snapshot(frame, event):
+    try:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        event_type = event.get("type", "EVENT")
+        camera_id = event.get("camera_id", "CAM")
+
+        filename = f"{camera_id}_{event_type}_{timestamp}.jpg"
+        file_path = SNAPSHOTS_DIR / filename
+
+        cv2.imwrite(str(file_path), frame)
+
+        event["snapshot_file"] = filename
+        event["snapshot_url"] = f"http://127.0.0.1:8000/recordings/snapshots/{filename}"
+
+        return event
+
+    except Exception as e:
+        print("⚠ Snapshot save error:", e)
+        return event
 
 
 # 🟢 CHANGED: Send annotated frame to backend
@@ -201,10 +234,15 @@ def main():
         # Send events to backend
         for event in events:
 
-            # 🟢 CHANGED: Attach camera + timestamp metadata before sending
+            # 🟢 CHANGED: Attach camera + timestamp metadata
             # REASON: Backend, dashboard, and reports need event source info
 
             event = enrich_event_metadata(event)
+
+            # 🟢 CHANGED: Save snapshot for each event
+            # REASON: Dashboard playback needs visual evidence
+
+            event = save_event_snapshot(frame, event)
 
             print("🚨 EVENT:", event)
 

@@ -37,3 +37,5 @@ data/videos/
 *.avi
 *.mov
 *.mkv
+# Recordings / alert evidence
+recordings/

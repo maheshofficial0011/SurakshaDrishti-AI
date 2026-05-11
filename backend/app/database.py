@@ -409,6 +409,11 @@ def get_events_for_export(
     export_rows = []
 
     for row in rows:
+        try:
+            raw_event = json.loads(row[9])
+        except Exception:
+            raw_event = {}
+
         export_rows.append(
             {
                 "id": row[0],
@@ -425,6 +430,8 @@ def get_events_for_export(
                 "camera_name": row[12],
                 "camera_location": row[13],
                 "event_timestamp": row[14],
+                "snapshot_url": raw_event.get("snapshot_url", ""),
+                "snapshot_file": raw_event.get("snapshot_file", ""),
             }
         )
 

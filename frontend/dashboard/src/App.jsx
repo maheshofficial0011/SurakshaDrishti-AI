@@ -1064,6 +1064,40 @@ function AlertCard({ event, index, getSeverityColor, getEventIcon }) {
                     {event.message}
                 </div>
             )}
+            {/* 🟢 CHANGED: Display alert snapshot */}
+            {/* REASON: Operator should review captured evidence image for each alert */}
+
+            {event.snapshot_url && (
+                <div style={{ marginBottom: "10px" }}>
+                    <img
+                        src={event.snapshot_url}
+                        alt="Alert Snapshot"
+                        style={{
+                            width: "100%",
+                            maxHeight: "180px",
+                            objectFit: "cover",
+                            borderRadius: "10px",
+                            border: "1px solid #334155",
+                            background: "#000",
+                        }}
+                    />
+
+                    <a
+                        href={event.snapshot_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                            color: "#38bdf8",
+                            fontSize: "13px",
+                            display: "inline-block",
+                            marginTop: "6px",
+                            textDecoration: "none",
+                        }}
+                    >
+                        🔎 Open Snapshot
+                    </a>
+                </div>
+            )}
 
             <div style={{ color: "#cbd5e1", fontSize: "14px", lineHeight: 1.6 }}>
                 {event.db_id !== undefined && <div>🗃 DB ID: {event.db_id}</div>}

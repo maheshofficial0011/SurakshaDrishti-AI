@@ -15,7 +15,28 @@ from typing import List
 
 from backend.app.database import init_db
 
+# 🟢 CHANGED: Added static file serving for alert snapshots
+# REASON: Dashboard needs to display saved alert snapshot images
+
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
+
 app = FastAPI(title="SurakshaNet AI Backend", version="1.0.0")
+
+# 🟢 CHANGED: Serve alert recording files
+# REASON: Frontend can access snapshots saved by pipeline
+
+RECORDINGS_DIR = Path("recordings")
+RECORDINGS_DIR.mkdir(exist_ok=True)
+
+SNAPSHOTS_DIR = RECORDINGS_DIR / "snapshots"
+SNAPSHOTS_DIR.mkdir(exist_ok=True)
+
+app.mount(
+    "/recordings",
+    StaticFiles(directory=str(RECORDINGS_DIR)),
+    name="recordings",
+)
 # 🟢 CHANGED: Initialize database at startup
 # REASON: Create event table automatically
 
