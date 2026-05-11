@@ -24,6 +24,7 @@ logs/
 *.pt
 *.onnx
 *.engine
+models/
 
 # OS / IDE
 .DS_Store

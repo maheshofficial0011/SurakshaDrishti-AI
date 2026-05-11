@@ -1,66 +1,72 @@
-# 🟢 CHANGED: GPU-aware optimized detector
-# REASON: Use CUDA when available and avoid running the same YOLO model 3 times unnecessarily
+# 🟢 CHANGED: Fast CPU-stable detector
+# REASON: YOLO-World is too slow on CPU, so weapon model is optional/off by default
 
 import torch
-from ultralytics import YOLO
+from ultralytics import YOLO, YOLOWorld
 
 
 class Detector:
     """
     Unified detector for SurakshaNet AI.
 
-    Current setup:
-    - Uses YOLOv8n pretrained model for person/general object detection.
-    - Weapon and PPE are kept as logical hooks for future custom models.
-    - If weapon/PPE model paths are same as person model, inference runs only once.
+    Current fast mode:
+    - YOLOv8n handles person/general object detection.
+    - YOLO-World weapon detection is disabled by default for CPU performance.
+    - PPE logic is excluded.
     """
 
     def __init__(self):
-        # 🟢 CHANGED: Select GPU if available
-        # REASON: Move YOLO inference to GPU when CUDA PyTorch is installed
-
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.use_half = self.device.startswith("cuda")
 
         print(f"🚀 Detector running on: {self.device}")
 
-        # 🟢 CHANGED: Centralized model paths
-        # REASON: Easy future replacement with real weapon/PPE models
+        self.general_model_path = "yolov8n.pt"
+        self.general_conf = 0.35
 
-        self.person_model_path = "yolov8n.pt"
-        self.weapon_model_path = "yolov8n.pt"
-        self.ppe_model_path = "yolov8n.pt"
+        self.general_model = YOLO(self.general_model_path)
+        self.general_model.to(self.device)
 
-        # 🟢 CHANGED: Load main YOLO model once
-        # REASON: Running yolov8n three times caused major lag
+        self.weapon_classes = [
+            "gun",
+            "handgun",
+            "pistol",
+            "rifle",
+            "knife",
+            "weapon",
+        ]
 
-        self.person_model = YOLO(self.person_model_path)
-        self.person_model.to(self.device)
+        self.weapon_conf = 0.25
 
-        # 🟢 CHANGED: Avoid duplicate model loading if same weights are used
-        # REASON: Weapon/PPE are currently hooks using same model, so reuse model
+        # Keep False for smooth CPU demo.
+        # Set True only if CUDA GPU is working or you want to test weapon scan.
+        self.weapon_enabled = False
+        self.weapon_model = None
 
-        if self.weapon_model_path == self.person_model_path:
-            self.weapon_model = self.person_model
+        if self.weapon_enabled:
+            try:
+                self.weapon_model = YOLOWorld("yolov8s-world.pt")
+                self.weapon_model.to(self.device)
+                self.weapon_model.set_classes(self.weapon_classes)
+
+                print("🔫 YOLO-World weapon prompts active:", self.weapon_classes)
+
+            except Exception as e:
+                self.weapon_enabled = False
+                self.weapon_model = None
+                print("⚠ YOLO-World weapon model disabled:", e)
         else:
-            self.weapon_model = YOLO(self.weapon_model_path)
-            self.weapon_model.to(self.device)
+            print("⚡ Weapon detection disabled for smooth CPU performance")
 
-        if self.ppe_model_path == self.person_model_path:
-            self.ppe_model = self.person_model
-        else:
-            self.ppe_model = YOLO(self.ppe_model_path)
-            self.ppe_model.to(self.device)
-
-    def _predict(self, model, frame):
-        # 🟢 CHANGED: Use explicit predict with device + half precision on CUDA
-        # REASON: Ensures Ultralytics uses GPU when available
-
+    def _predict(self, model, frame, conf):
         return model.predict(
             frame,
             device=self.device,
             verbose=False,
             half=self.use_half,
+            conf=conf,
+            iou=0.45,
+            imgsz=640,
         )[0]
 
     def _parse(self, result, label_source):
@@ -84,33 +90,30 @@ class Detector:
         return detections
 
     def detect(self, frame):
-        results = []
+        detections = []
 
-        # 🟢 CHANGED: Run main model once when all paths are same
-        # REASON: Huge performance improvement for current demo setup
+        general_result = self._predict(
+            self.general_model,
+            frame,
+            conf=self.general_conf,
+        )
 
-        if (
-            self.person_model_path == self.weapon_model_path
-            and self.person_model_path == self.ppe_model_path
-        ):
-            general_result = self._predict(self.person_model, frame)
+        detections += self._parse(general_result, "general")
 
-            # Current pretrained YOLO gives real COCO classes such as:
-            # person, car, chair, bottle, cell phone, etc.
-            results += self._parse(general_result, "general")
+        if self.weapon_enabled and self.weapon_model is not None:
+            weapon_result = self._predict(
+                self.weapon_model,
+                frame,
+                conf=self.weapon_conf,
+            )
 
-            return results
+            weapon_detections = self._parse(weapon_result, "weapon_world")
 
-        # PERSON / GENERAL OBJECTS
-        person_res = self._predict(self.person_model, frame)
-        results += self._parse(person_res, "person")
+            for det in weapon_detections:
+                cls = det.get("class", "").lower()
+                conf = float(det.get("conf", 0) or 0)
 
-        # WEAPON DETECTION HOOK
-        weapon_res = self._predict(self.weapon_model, frame)
-        results += self._parse(weapon_res, "weapon")
+                if cls in self.weapon_classes and conf >= self.weapon_conf:
+                    detections.append(det)
 
-        # PPE DETECTION HOOK
-        ppe_res = self._predict(self.ppe_model, frame)
-        results += self._parse(ppe_res, "ppe")
-
-        return results
+        return detections
