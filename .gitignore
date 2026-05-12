@@ -71,3 +71,9 @@ create_final_backup.py
 debug_detector_output.py
 *.backup*
 *.bak
+
+# Backup files generated during development
+*.backup*
+*.bak
+*.backup_*
+*.backup-before-*
