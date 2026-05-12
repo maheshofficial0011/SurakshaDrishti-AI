@@ -840,95 +840,8 @@ export default function App() {
         return "#ef4444"
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pinned Emergency Sorting
-    |--------------------------------------------------------------------------
-    | Requirement:
-    | - SOS / CRITICAL / HIGH alerts should stay on top until their linked
-    |   authority dispatch records are resolved.
-    |
-    | Logic:
-    | - If an event has related dispatch records and all are RESOLVED,
-    |   it is not pinned anymore.
-    | - If it is SOS_ALERT / CRITICAL / HIGH and not fully resolved,
-    |   it stays at the top.
-    */
-
-    function isEventResolvedByAuthority(event) {
-        if (!event || !event.db_id) {
-            return false
-        }
-
-        const relatedDispatches = (dispatches || []).filter(
-            (dispatch) => Number(dispatch.event_id) === Number(event.db_id)
-        )
-
-        if (relatedDispatches.length === 0) {
-            return false
-        }
-
-        return relatedDispatches.every((dispatch) => dispatch.status === "RESOLVED")
-    }
-
-    function isPinnedEmergencyEvent(event) {
-        if (!event) {
-            return false
-        }
-
-        const isEmergency =
-            event.type === "SOS_ALERT" ||
-            event.severity === "CRITICAL" ||
-            event.severity === "HIGH"
-
-        return isEmergency && !isEventResolvedByAuthority(event)
-    }
-
-    function getEventTimestampValue(event) {
-        const rawTime = event?.created_at || event?.timestamp || 0
-        const parsedTime = new Date(rawTime).getTime()
-
-        if (Number.isNaN(parsedTime)) {
-            return Number(rawTime) || 0
-        }
-
-        return parsedTime
-    }
-
-    function sortEventsForPriority(eventList) {
-        return [...(eventList || [])].sort((a, b) => {
-            const aPinned = isPinnedEmergencyEvent(a)
-            const bPinned = isPinnedEmergencyEvent(b)
-
-            if (aPinned && !bPinned) return -1
-            if (bPinned && !aPinned) return 1
-
-            const severityPriority = {
-                CRITICAL: 1,
-                HIGH: 2,
-                MEDIUM: 3,
-                LOW: 4,
-                INFO: 5,
-            }
-
-            const aSeverityPriority = severityPriority[a.severity] || 6
-            const bSeverityPriority = severityPriority[b.severity] || 6
-
-            if (aPinned && bPinned && aSeverityPriority !== bSeverityPriority) {
-                return aSeverityPriority - bSeverityPriority
-            }
-
-            return getEventTimestampValue(b) - getEventTimestampValue(a)
-        })
-    }
-
-    const sortedEvents = useMemo(
-        () => sortEventsForPriority(events),
-        [events, dispatches]
-    )
-
-    const latestCritical = sortedEvents.find((event) =>
-        isPinnedEmergencyEvent(event)
+    const latestCritical = events.find(
+        (e) => e.severity === "CRITICAL" || e.severity === "HIGH"
     )
 
     const latestEvent = events[0]
@@ -1029,7 +942,7 @@ export default function App() {
                 ) : activeSection !== "dashboard" ? (
                     <SectionPlaceholder
                         activeSection={activeSection}
-                        events={sortedEvents}
+                        events={events}
                         backendAnalytics={backendAnalytics}
                         heatmapData={typeof heatmapData !== "undefined" ? heatmapData : null}
                         dispatches={typeof dispatches !== "undefined" ? dispatches : []}
@@ -1095,7 +1008,7 @@ export default function App() {
                         />
 
                         <MainDashboardGrid
-                            events={sortedEvents}
+                            events={events}
                             stats={stats}
                             backendAnalytics={backendAnalytics}
                             heatmapData={heatmapData}

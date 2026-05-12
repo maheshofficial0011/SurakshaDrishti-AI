@@ -136,23 +136,6 @@ export default function App() {
     const [heatmapData, setHeatmapData] = useState(null)
     const [dispatches, setDispatches] = useState([])
     const [sosLoading, setSosLoading] = useState(false)
-    const [authorityFilter, setAuthorityFilter] = useState("ALL")
-
-    /*
-    |--------------------------------------------------------------------------
-    | Realistic SOS Form State
-    |--------------------------------------------------------------------------
-    | Used only by the SOS Control section.
-    | Submits to the existing /sos backend endpoint.
-    */
-    const [sosForm, setSosForm] = useState({
-        user_name: "Demo User",
-        phone: "demo",
-        incident_location: "Demo Laptop Location",
-        incident_type: "Medical Emergency",
-        help_needed: ["POLICE", "AMBULANCE"],
-        details: "Person injured near main gate",
-    })
 
     /*
     |--------------------------------------------------------------------------
@@ -537,19 +520,21 @@ export default function App() {
     | dispatcher creates authority response → WebSocket/dashboard updates.
     */
 
-    async function triggerSosDemo(customPayload = null) {
+    async function triggerSosDemo() {
         try {
             setSosLoading(true)
             setLastError("")
-
-            const payload = customPayload || sosForm
 
             const response = await fetch(`${API_BASE}/sos`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
-                body: JSON.stringify(payload),
+                body: JSON.stringify({
+                    user_name: "Demo User",
+                    phone: "demo",
+                    message: "Emergency SOS triggered from dashboard demo",
+                }),
             })
 
             if (!response.ok) {
@@ -563,67 +548,6 @@ export default function App() {
             setLastError("Could not trigger SOS demo")
         } finally {
             setSosLoading(false)
-        }
-    }
-
-    function updateSosFormField(field, value) {
-        setSosForm((prev) => ({
-            ...prev,
-            [field]: value,
-        }))
-    }
-
-    function toggleSosHelpNeeded(helpType) {
-        setSosForm((prev) => {
-            const current = prev.help_needed || []
-
-            if (current.includes(helpType)) {
-                const next = current.filter((item) => item !== helpType)
-
-                return {
-                    ...prev,
-                    help_needed: next.length > 0 ? next : current,
-                }
-            }
-
-            return {
-                ...prev,
-                help_needed: [...current, helpType],
-            }
-        })
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Authority Workflow Actions
-    |--------------------------------------------------------------------------
-    | Uses existing backend workflow endpoints:
-    | - assign
-    | - dispatch
-    | - resolve
-    */
-
-    async function updateDispatchWorkflow(dispatchId, action, payload = {}) {
-        try {
-            setLastError("")
-
-            const response = await fetch(`${API_BASE}/dispatches/${dispatchId}/${action}`, {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-            })
-
-            if (!response.ok) {
-                throw new Error(`Failed to ${action} dispatch`)
-            }
-
-            await loadBackendAnalytics()
-            await loadEventHistory()
-        } catch (err) {
-            console.error("Failed to update dispatch workflow:", err)
-            setLastError("Could not update authority response status")
         }
     }
 
@@ -840,95 +764,8 @@ export default function App() {
         return "#ef4444"
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Pinned Emergency Sorting
-    |--------------------------------------------------------------------------
-    | Requirement:
-    | - SOS / CRITICAL / HIGH alerts should stay on top until their linked
-    |   authority dispatch records are resolved.
-    |
-    | Logic:
-    | - If an event has related dispatch records and all are RESOLVED,
-    |   it is not pinned anymore.
-    | - If it is SOS_ALERT / CRITICAL / HIGH and not fully resolved,
-    |   it stays at the top.
-    */
-
-    function isEventResolvedByAuthority(event) {
-        if (!event || !event.db_id) {
-            return false
-        }
-
-        const relatedDispatches = (dispatches || []).filter(
-            (dispatch) => Number(dispatch.event_id) === Number(event.db_id)
-        )
-
-        if (relatedDispatches.length === 0) {
-            return false
-        }
-
-        return relatedDispatches.every((dispatch) => dispatch.status === "RESOLVED")
-    }
-
-    function isPinnedEmergencyEvent(event) {
-        if (!event) {
-            return false
-        }
-
-        const isEmergency =
-            event.type === "SOS_ALERT" ||
-            event.severity === "CRITICAL" ||
-            event.severity === "HIGH"
-
-        return isEmergency && !isEventResolvedByAuthority(event)
-    }
-
-    function getEventTimestampValue(event) {
-        const rawTime = event?.created_at || event?.timestamp || 0
-        const parsedTime = new Date(rawTime).getTime()
-
-        if (Number.isNaN(parsedTime)) {
-            return Number(rawTime) || 0
-        }
-
-        return parsedTime
-    }
-
-    function sortEventsForPriority(eventList) {
-        return [...(eventList || [])].sort((a, b) => {
-            const aPinned = isPinnedEmergencyEvent(a)
-            const bPinned = isPinnedEmergencyEvent(b)
-
-            if (aPinned && !bPinned) return -1
-            if (bPinned && !aPinned) return 1
-
-            const severityPriority = {
-                CRITICAL: 1,
-                HIGH: 2,
-                MEDIUM: 3,
-                LOW: 4,
-                INFO: 5,
-            }
-
-            const aSeverityPriority = severityPriority[a.severity] || 6
-            const bSeverityPriority = severityPriority[b.severity] || 6
-
-            if (aPinned && bPinned && aSeverityPriority !== bSeverityPriority) {
-                return aSeverityPriority - bSeverityPriority
-            }
-
-            return getEventTimestampValue(b) - getEventTimestampValue(a)
-        })
-    }
-
-    const sortedEvents = useMemo(
-        () => sortEventsForPriority(events),
-        [events, dispatches]
-    )
-
-    const latestCritical = sortedEvents.find((event) =>
-        isPinnedEmergencyEvent(event)
+    const latestCritical = events.find(
+        (e) => e.severity === "CRITICAL" || e.severity === "HIGH"
     )
 
     const latestEvent = events[0]
@@ -1029,7 +866,7 @@ export default function App() {
                 ) : activeSection !== "dashboard" ? (
                     <SectionPlaceholder
                         activeSection={activeSection}
-                        events={sortedEvents}
+                        events={events}
                         backendAnalytics={backendAnalytics}
                         heatmapData={typeof heatmapData !== "undefined" ? heatmapData : null}
                         dispatches={typeof dispatches !== "undefined" ? dispatches : []}
@@ -1039,14 +876,6 @@ export default function App() {
                         markEventUnreviewed={markEventUnreviewed}
                         getSeverityColor={getSeverityColor}
                         getEventIcon={getEventIcon}
-                        sosForm={sosForm}
-                        updateSosFormField={updateSosFormField}
-                        toggleSosHelpNeeded={toggleSosHelpNeeded}
-                        triggerSosDemo={triggerSosDemo}
-                        sosLoading={sosLoading}
-                        authorityFilter={authorityFilter}
-                        setAuthorityFilter={setAuthorityFilter}
-                        updateDispatchWorkflow={updateDispatchWorkflow}
                     />
                 ) : (
                     <>
@@ -1095,7 +924,7 @@ export default function App() {
                         />
 
                         <MainDashboardGrid
-                            events={sortedEvents}
+                            events={events}
                             stats={stats}
                             backendAnalytics={backendAnalytics}
                             heatmapData={heatmapData}
@@ -1132,14 +961,6 @@ function SectionPlaceholder({
     markEventUnreviewed,
     getSeverityColor,
     getEventIcon,
-    sosForm,
-    updateSosFormField,
-    toggleSosHelpNeeded,
-    triggerSosDemo,
-    sosLoading,
-    authorityFilter,
-    setAuthorityFilter,
-    updateDispatchWorkflow,
 }) {
     const sectionConfig = {
         live: {
@@ -1165,17 +986,15 @@ function SectionPlaceholder({
         },
         sos: {
             icon: "🆘",
-            title: "Mobile SOS Emergency Panel",
+            title: "SOS Control Section",
             description:
-                "Realistic SOS form connected to the existing /sos backend endpoint.",
-            custom: "sos",
+                "This section is ready. Next step can add the realistic SOS form here safely.",
         },
         authority: {
             icon: "🚓",
-            title: "Authority Response Center",
+            title: "Authority Response Section",
             description:
-                "Incident workflow connected to Pending / Assigned / Running / Resolved backend APIs.",
-            custom: "authority",
+                "This section is ready. Next step can add Pending / Assigned / Running / Resolved workflow here safely.",
         },
         analytics: {
             icon: "📈",
@@ -1238,29 +1057,6 @@ function SectionPlaceholder({
 
     if (config.custom === "heatmap") {
         return <HeatmapPanel heatmapData={heatmapData} />
-    }
-
-    if (config.custom === "sos") {
-        return (
-            <SosControlPanel
-                sosForm={sosForm}
-                updateSosFormField={updateSosFormField}
-                toggleSosHelpNeeded={toggleSosHelpNeeded}
-                triggerSosDemo={triggerSosDemo}
-                sosLoading={sosLoading}
-            />
-        )
-    }
-
-    if (config.custom === "authority") {
-        return (
-            <AuthorityResponseCenter
-                dispatches={dispatches}
-                authorityFilter={authorityFilter}
-                setAuthorityFilter={setAuthorityFilter}
-                updateDispatchWorkflow={updateDispatchWorkflow}
-            />
-        )
     }
 
     return (
@@ -2686,449 +2482,6 @@ function AuthorityResponsePanel({ dispatches }) {
                 </div>
             )}
         </Panel>
-    )
-}
-
-function getAuthoritySummary(dispatches) {
-    const summary = {
-        pending: 0,
-        assigned: 0,
-        running: 0,
-        resolved: 0,
-    }
-
-    ;(dispatches || []).forEach((dispatch) => {
-        const status = dispatch.status || "PENDING"
-
-        if (status === "PENDING") summary.pending += 1
-        else if (status === "ASSIGNED") summary.assigned += 1
-        else if (status === "DISPATCHED") summary.running += 1
-        else if (status === "RESOLVED") summary.resolved += 1
-    })
-
-    return summary
-}
-
-function AuthorityResponseCenter({
-    dispatches,
-    authorityFilter,
-    setAuthorityFilter,
-    updateDispatchWorkflow,
-}) {
-    const summary = getAuthoritySummary(dispatches)
-
-    const filteredDispatches = (dispatches || []).filter((dispatch) => {
-        if (authorityFilter === "ALL") return true
-        if (authorityFilter === "RUNNING") return dispatch.status === "DISPATCHED"
-
-        return dispatch.status === authorityFilter
-    })
-
-    const sortedDispatches = [...filteredDispatches].sort((a, b) => {
-        const priority = {
-            PENDING: 1,
-            ASSIGNED: 2,
-            DISPATCHED: 3,
-            RESOLVED: 9,
-        }
-
-        const aPriority = priority[a.status] || 5
-        const bPriority = priority[b.status] || 5
-
-        if (aPriority !== bPriority) {
-            return aPriority - bPriority
-        }
-
-        return new Date(b.created_at || 0) - new Date(a.created_at || 0)
-    })
-
-    return (
-        <Panel title="🚓 Authority Response Center">
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(4, 1fr)",
-                    gap: "14px",
-                    marginBottom: "18px",
-                }}
-            >
-                <StatCard title="Pending" value={summary.pending} color="#f59e0b" />
-                <StatCard title="Assigned" value={summary.assigned} color="#38bdf8" />
-                <StatCard title="Running" value={summary.running} color="#22c55e" />
-                <StatCard title="Resolved" value={summary.resolved} color="#64748b" />
-            </div>
-
-            <div
-                style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "10px",
-                    marginBottom: "16px",
-                }}
-            >
-                {[
-                    ["ALL", "All"],
-                    ["PENDING", "Pending"],
-                    ["ASSIGNED", "Assigned"],
-                    ["RUNNING", "Running"],
-                    ["RESOLVED", "Resolved"],
-                ].map(([value, label]) => (
-                    <button
-                        key={value}
-                        onClick={() => setAuthorityFilter(value)}
-                        style={{
-                            background: authorityFilter === value ? "#2563eb" : "#111827",
-                            color: "white",
-                            border:
-                                authorityFilter === value
-                                    ? "1px solid #93c5fd"
-                                    : "1px solid #334155",
-                            borderRadius: "999px",
-                            padding: "9px 13px",
-                            fontWeight: "bold",
-                        }}
-                    >
-                        {label}
-                    </button>
-                ))}
-            </div>
-
-            {sortedDispatches.length === 0 ? (
-                <div
-                    style={{
-                        color: "#94a3b8",
-                        background: "#111827",
-                        border: "1px dashed #334155",
-                        borderRadius: "14px",
-                        padding: "16px",
-                        textAlign: "center",
-                    }}
-                >
-                    No authority incidents in this status.
-                </div>
-            ) : (
-                <div style={{ display: "grid", gap: "12px" }}>
-                    {sortedDispatches.map((dispatch) => (
-                        <AuthorityIncidentCard
-                            key={dispatch.id || dispatch.dispatch_id}
-                            dispatch={dispatch}
-                            updateDispatchWorkflow={updateDispatchWorkflow}
-                        />
-                    ))}
-                </div>
-            )}
-        </Panel>
-    )
-}
-
-function AuthorityIncidentCard({ dispatch, updateDispatchWorkflow }) {
-    const status = dispatch.status || "PENDING"
-    const statusLabel = status === "DISPATCHED" ? "RUNNING" : status
-
-    return (
-        <div
-            style={{
-                background: "#111827",
-                border: status === "RESOLVED" ? "1px solid #475569" : "1px solid #2563eb",
-                borderRadius: "16px",
-                padding: "15px",
-            }}
-        >
-            <div
-                style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: "12px",
-                    alignItems: "center",
-                    marginBottom: "10px",
-                }}
-            >
-                <div>
-                    <div style={{ color: "#93c5fd", fontWeight: "bold", fontSize: "17px" }}>
-                        {dispatch.unit_name || "Authority Unit"}
-                    </div>
-
-                    <div style={{ color: "#94a3b8", fontSize: "13px" }}>
-                        {dispatch.event_type || "EVENT"} • {dispatch.location_label || "Unknown location"}
-                    </div>
-                </div>
-
-                <Badge
-                    label={statusLabel}
-                    color={
-                        status === "PENDING"
-                            ? "#f59e0b"
-                            : status === "ASSIGNED"
-                                ? "#38bdf8"
-                                : status === "DISPATCHED"
-                                    ? "#22c55e"
-                                    : "#64748b"
-                    }
-                />
-            </div>
-
-            <div style={{ color: "#cbd5e1", fontSize: "13px", lineHeight: 1.7 }}>
-                <div>🆔 Dispatch: {dispatch.dispatch_id}</div>
-                <div>🚔 Unit Type: {dispatch.unit_type}</div>
-                <div>⏱ ETA: {dispatch.eta_minutes} min</div>
-                <div>🕒 Created: {dispatch.created_at}</div>
-                {dispatch.assigned_at && <div>✅ Assigned: {dispatch.assigned_at}</div>}
-                {dispatch.dispatched_at && <div>🚓 Running: {dispatch.dispatched_at}</div>}
-                {dispatch.resolved_at && <div>✅ Resolved: {dispatch.resolved_at}</div>}
-                {dispatch.resolution_note && <div>📝 Note: {dispatch.resolution_note}</div>}
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "12px" }}>
-                {status === "PENDING" && (
-                    <ActionButton
-                        label="Assign Unit"
-                        color="#2563eb"
-                        onClick={() =>
-                            updateDispatchWorkflow(dispatch.dispatch_id, "assign", {
-                                unit_type: dispatch.unit_type,
-                                unit_name: dispatch.unit_name,
-                                eta_minutes: dispatch.eta_minutes,
-                            })
-                        }
-                    />
-                )}
-
-                {status === "ASSIGNED" && (
-                    <ActionButton
-                        label="Dispatch / Running"
-                        color="#16a34a"
-                        onClick={() =>
-                            updateDispatchWorkflow(dispatch.dispatch_id, "dispatch", {
-                                eta_minutes: dispatch.eta_minutes,
-                            })
-                        }
-                    />
-                )}
-
-                {status !== "RESOLVED" && (
-                    <ActionButton
-                        label="Resolve"
-                        color="#475569"
-                        onClick={() =>
-                            updateDispatchWorkflow(dispatch.dispatch_id, "resolve", {
-                                resolution_note:
-                                    "Incident checked and resolved by authority unit.",
-                            })
-                        }
-                    />
-                )}
-            </div>
-        </div>
-    )
-}
-
-function SosControlPanel({
-    sosForm,
-    updateSosFormField,
-    toggleSosHelpNeeded,
-    triggerSosDemo,
-    sosLoading,
-}) {
-    const helpOptions = ["POLICE", "AMBULANCE", "FIRE", "RESCUE", "SECURITY"]
-
-    return (
-        <Panel title="🆘 Mobile SOS Emergency Panel">
-            <div
-                style={{
-                    display: "grid",
-                    gridTemplateColumns: "minmax(0, 1fr) minmax(300px, 0.8fr)",
-                    gap: "18px",
-                }}
-            >
-                <div style={{ display: "grid", gap: "14px" }}>
-                    <FormInput
-                        label="Reporter Name"
-                        value={sosForm.user_name}
-                        onChange={(value) => updateSosFormField("user_name", value)}
-                    />
-
-                    <FormInput
-                        label="Phone / Contact"
-                        value={sosForm.phone}
-                        onChange={(value) => updateSosFormField("phone", value)}
-                    />
-
-                    <FormInput
-                        label="Incident Location"
-                        value={sosForm.incident_location}
-                        onChange={(value) => updateSosFormField("incident_location", value)}
-                    />
-
-                    <FilterSelect
-                        label="Incident Type"
-                        value={sosForm.incident_type}
-                        onChange={(value) => updateSosFormField("incident_type", value)}
-                        options={[
-                            ["Medical Emergency", "Medical Emergency"],
-                            ["Fire / Smoke", "Fire / Smoke"],
-                            ["Violence / Threat", "Violence / Threat"],
-                            ["Suspicious Person", "Suspicious Person"],
-                            ["Accident", "Accident"],
-                            ["Crowd Panic", "Crowd Panic"],
-                            ["Women Safety", "Women Safety"],
-                            ["General Emergency", "General Emergency"],
-                        ]}
-                    />
-
-                    <div>
-                        <div
-                            style={{
-                                color: "#94a3b8",
-                                marginBottom: "8px",
-                                fontSize: "13px",
-                                fontWeight: "bold",
-                            }}
-                        >
-                            Help Needed
-                        </div>
-
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
-                            {helpOptions.map((option) => {
-                                const active = sosForm.help_needed.includes(option)
-
-                                return (
-                                    <button
-                                        key={option}
-                                        onClick={() => toggleSosHelpNeeded(option)}
-                                        style={{
-                                            background: active ? "#dc2626" : "#111827",
-                                            color: "white",
-                                            border: active
-                                                ? "1px solid #fecaca"
-                                                : "1px solid #334155",
-                                            borderRadius: "999px",
-                                            padding: "9px 12px",
-                                            fontWeight: "bold",
-                                        }}
-                                    >
-                                        {active ? "✓ " : ""}{option}
-                                    </button>
-                                )
-                            })}
-                        </div>
-                    </div>
-
-                    <label>
-                        <div
-                            style={{
-                                color: "#94a3b8",
-                                marginBottom: "6px",
-                                fontSize: "13px",
-                                fontWeight: "bold",
-                            }}
-                        >
-                            Incident Details
-                        </div>
-
-                        <textarea
-                            value={sosForm.details}
-                            onChange={(e) => updateSosFormField("details", e.target.value)}
-                            rows={5}
-                            style={{
-                                width: "100%",
-                                boxSizing: "border-box",
-                                background: "#111827",
-                                color: "white",
-                                border: "1px solid #334155",
-                                borderRadius: "10px",
-                                padding: "12px",
-                                fontWeight: "bold",
-                                resize: "vertical",
-                            }}
-                        />
-                    </label>
-
-                    <button
-                        onClick={() => triggerSosDemo(sosForm)}
-                        disabled={sosLoading}
-                        style={{
-                            background: "#dc2626",
-                            color: "white",
-                            border: "1px solid #fecaca",
-                            borderRadius: "14px",
-                            padding: "14px 18px",
-                            fontWeight: "bold",
-                            fontSize: "16px",
-                            opacity: sosLoading ? 0.7 : 1,
-                        }}
-                    >
-                        {sosLoading ? "Sending SOS..." : "🚨 Trigger Emergency SOS"}
-                    </button>
-                </div>
-
-                <div
-                    style={{
-                        background: "#111827",
-                        border: "1px solid #dc2626",
-                        borderRadius: "18px",
-                        padding: "16px",
-                    }}
-                >
-                    <h3 style={{ marginTop: 0, color: "#fecaca" }}>SOS Preview</h3>
-
-                    <div style={{ color: "#cbd5e1", lineHeight: 1.8 }}>
-                        <div><strong>Reporter:</strong> {sosForm.user_name}</div>
-                        <div><strong>Contact:</strong> {sosForm.phone}</div>
-                        <div><strong>Location:</strong> {sosForm.incident_location}</div>
-                        <div><strong>Incident:</strong> {sosForm.incident_type}</div>
-                        <div><strong>Help:</strong> {sosForm.help_needed.join(", ")}</div>
-                        <div><strong>Details:</strong> {sosForm.details}</div>
-                    </div>
-
-                    <div
-                        style={{
-                            marginTop: "16px",
-                            background: "#7f1d1d",
-                            border: "1px solid #ef4444",
-                            borderRadius: "14px",
-                            padding: "12px",
-                            color: "#fee2e2",
-                            fontWeight: "bold",
-                        }}
-                    >
-                        This creates an SOS alert and sends matching PENDING incidents
-                        to Authority Response.
-                    </div>
-                </div>
-            </div>
-        </Panel>
-    )
-}
-
-function FormInput({ label, value, onChange }) {
-    return (
-        <label>
-            <div
-                style={{
-                    color: "#94a3b8",
-                    marginBottom: "6px",
-                    fontSize: "13px",
-                    fontWeight: "bold",
-                }}
-            >
-                {label}
-            </div>
-
-            <input
-                value={value}
-                onChange={(e) => onChange(e.target.value)}
-                style={{
-                    width: "100%",
-                    boxSizing: "border-box",
-                    background: "#111827",
-                    color: "white",
-                    border: "1px solid #334155",
-                    borderRadius: "10px",
-                    padding: "12px",
-                    fontWeight: "bold",
-                }}
-            />
-        </label>
     )
 }
 
