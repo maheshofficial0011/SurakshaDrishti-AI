@@ -1,0 +1,399 @@
+"""
+SurakshaDrishti AI — Assistant Section Only Patch
+
+Purpose:
+- Replace only the AI Assistant sidebar placeholder with a real section.
+- Keep floating assistant chat unchanged.
+- No backend changes.
+- No new packages.
+- No architecture changes.
+
+Safety:
+- Only modifies frontend/dashboard/src/App.jsx.
+- Creates backup before editing.
+"""
+
+from pathlib import Path
+
+
+APP_PATH = Path("frontend/dashboard/src/App.jsx")
+BACKUP_PATH = Path("frontend/dashboard/src/App.jsx.backup_before_assistant_section")
+
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise RuntimeError(f"Could not find expected block: {label}")
+    return text.replace(old, new, 1)
+
+
+def insert_before(text: str, marker: str, insert: str, label: str) -> str:
+    if marker not in text:
+        raise RuntimeError(f"Could not find marker: {label}")
+    return text.replace(marker, insert + marker, 1)
+
+
+def main():
+    if not APP_PATH.exists():
+        raise FileNotFoundError(APP_PATH)
+
+    source = APP_PATH.read_text(encoding="utf-8")
+
+    if not BACKUP_PATH.exists():
+        BACKUP_PATH.write_text(source, encoding="utf-8")
+
+    text = source
+
+    # ------------------------------------------------------------
+    # 1. Mark assistant section as custom.
+    # ------------------------------------------------------------
+
+    old_assistant_config = '''        assistant: {
+            icon: "🤖",
+            title: "SurakshaNet Command Assistant",
+            description:
+                "This section is ready. Next step will add a local dashboard assistant connected to alerts, heatmap, SOS, and authority data.",
+        },'''
+
+    new_assistant_config = '''        assistant: {
+            icon: "🤖",
+            title: "SurakshaNet Command Assistant",
+            description:
+                "Local operator assistant connected to alerts, heatmap, SOS, and authority workflow data.",
+            custom: "assistant",
+        },'''
+
+    text = replace_once(
+        text,
+        old_assistant_config,
+        new_assistant_config,
+        "assistant section config",
+    )
+
+    # ------------------------------------------------------------
+    # 2. Add custom assistant render after authority render.
+    # ------------------------------------------------------------
+
+    old_authority_render = '''    if (config.custom === "authority") {
+        return (
+            <AuthorityResponseCenter
+                dispatches={dispatches}
+                authorityFilter={authorityFilter}
+                setAuthorityFilter={setAuthorityFilter}
+                updateDispatchWorkflow={updateDispatchWorkflow}
+            />
+        )
+    }
+
+    return ('''
+
+    new_authority_render = '''    if (config.custom === "authority") {
+        return (
+            <AuthorityResponseCenter
+                dispatches={dispatches}
+                authorityFilter={authorityFilter}
+                setAuthorityFilter={setAuthorityFilter}
+                updateDispatchWorkflow={updateDispatchWorkflow}
+            />
+        )
+    }
+
+    if (config.custom === "assistant") {
+        return (
+            <AssistantSection
+                events={events}
+                dispatches={dispatches}
+                heatmapData={heatmapData}
+                backendAnalytics={backendAnalytics}
+            />
+        )
+    }
+
+    return ('''
+
+    text = replace_once(
+        text,
+        old_authority_render,
+        new_authority_render,
+        "custom assistant render",
+    )
+
+    # ------------------------------------------------------------
+    # 3. Insert AssistantSection component before FloatingAssistantWidget.
+    # ------------------------------------------------------------
+
+    assistant_section_component = r'''function AssistantSection({
+    events,
+    dispatches,
+    heatmapData,
+    backendAnalytics,
+}) {
+    const latestEvent = events && events.length > 0 ? events[0] : null
+
+    const pendingCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "PENDING"
+    ).length
+
+    const assignedCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "ASSIGNED"
+    ).length
+
+    const runningCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "DISPATCHED"
+    ).length
+
+    const resolvedCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "RESOLVED"
+    ).length
+
+    const unresolvedSosCount = (events || []).filter((event) => {
+        if (event.type !== "SOS_ALERT") return false
+
+        const relatedDispatches = (dispatches || []).filter(
+            (dispatch) => Number(dispatch.event_id) === Number(event.db_id)
+        )
+
+        if (relatedDispatches.length === 0) return true
+
+        return relatedDispatches.some((dispatch) => dispatch.status !== "RESOLVED")
+    }).length
+
+    const suggestedAction =
+        pendingCount > 0
+            ? "Open Authority and assign pending incidents."
+            : runningCount > 0
+                ? "Monitor running responses and resolve after action is complete."
+                : unresolvedSosCount > 0
+                    ? "Review unresolved SOS alerts and confirm linked response units."
+                    : "System is stable. Continue monitoring live feed and alerts."
+
+    return (
+        <Panel title="🤖 SurakshaNet Command Assistant">
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+                    gap: "18px",
+                }}
+            >
+                <div
+                    style={{
+                        background: "#111827",
+                        border: "1px solid #2563eb",
+                        borderRadius: "18px",
+                        padding: "18px",
+                    }}
+                >
+                    <div
+                        style={{
+                            color: "#bfdbfe",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            marginBottom: "8px",
+                            letterSpacing: "0.5px",
+                        }}
+                    >
+                        LOCAL DASHBOARD ASSISTANT
+                    </div>
+
+                    <h2 style={{ margin: "0 0 10px", color: "#e5e7eb" }}>
+                        Ask the floating 🤖 assistant about your live system.
+                    </h2>
+
+                    <p style={{ color: "#cbd5e1", lineHeight: 1.7 }}>
+                        The assistant uses the current dashboard state including alerts,
+                        SOS incidents, heatmap risk, and authority response workflow.
+                        Use the floating button at the bottom-right corner to open the
+                        live chat panel.
+                    </p>
+
+                    <div
+                        style={{
+                            marginTop: "16px",
+                            background: "#020617",
+                            border: "1px solid #334155",
+                            borderRadius: "14px",
+                            padding: "14px",
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#94a3b8",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "10px",
+                            }}
+                        >
+                            TRY ASKING
+                        </div>
+
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                gap: "10px",
+                            }}
+                        >
+                            {[
+                                "What is the latest alert?",
+                                "Show pending incidents",
+                                "What is the current risk?",
+                                "What should I do next?",
+                                "Show unresolved SOS",
+                                "Open Authority",
+                            ].map((prompt) => (
+                                <div
+                                    key={prompt}
+                                    style={{
+                                        background: "#111827",
+                                        border: "1px solid #334155",
+                                        borderRadius: "12px",
+                                        padding: "10px",
+                                        color: "#e5e7eb",
+                                        fontWeight: "bold",
+                                        fontSize: "13px",
+                                    }}
+                                >
+                                    “{prompt}”
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            marginTop: "16px",
+                            background: "#1e3a8a",
+                            border: "1px solid #60a5fa",
+                            borderRadius: "14px",
+                            padding: "14px",
+                            color: "#dbeafe",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        Use the bottom-right 🤖 button to start chatting.
+                    </div>
+                </div>
+
+                <div
+                    style={{
+                        display: "grid",
+                        gap: "12px",
+                    }}
+                >
+                    <InfoTile
+                        title="Total Events"
+                        value={backendAnalytics?.total_events ?? events?.length ?? 0}
+                        color="#38bdf8"
+                    />
+
+                    <InfoTile
+                        title="Heatmap Risk"
+                        value={heatmapData?.risk_level || "UNKNOWN"}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Pending Incidents"
+                        value={pendingCount}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Running Responses"
+                        value={runningCount}
+                        color="#22c55e"
+                    />
+
+                    <InfoTile
+                        title="Resolved Incidents"
+                        value={resolvedCount}
+                        color="#64748b"
+                    />
+
+                    <InfoTile
+                        title="Unresolved SOS"
+                        value={unresolvedSosCount}
+                        color="#dc2626"
+                    />
+
+                    <div
+                        style={{
+                            background: "#111827",
+                            border: "1px solid #334155",
+                            borderRadius: "14px",
+                            padding: "14px",
+                            color: "#cbd5e1",
+                            lineHeight: 1.6,
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#94a3b8",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "7px",
+                            }}
+                        >
+                            SUGGESTED ACTION
+                        </div>
+
+                        <div style={{ color: "#e5e7eb", fontWeight: "bold" }}>
+                            {suggestedAction}
+                        </div>
+                    </div>
+
+                    {latestEvent && (
+                        <div
+                            style={{
+                                background: "#111827",
+                                border: "1px solid #334155",
+                                borderRadius: "14px",
+                                padding: "14px",
+                                color: "#cbd5e1",
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    color: "#94a3b8",
+                                    fontSize: "12px",
+                                    fontWeight: "bold",
+                                    marginBottom: "7px",
+                                }}
+                            >
+                                LATEST ALERT CONTEXT
+                            </div>
+
+                            <div style={{ color: "#e5e7eb", fontWeight: "bold" }}>
+                                {latestEvent.type} — {latestEvent.severity}
+                            </div>
+
+                            <div style={{ marginTop: "6px", fontSize: "13px" }}>
+                                {latestEvent.message}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </Panel>
+    )
+}
+
+'''
+
+    text = insert_before(
+        text,
+        "function FloatingAssistantWidget({",
+        assistant_section_component,
+        "before FloatingAssistantWidget",
+    )
+
+    APP_PATH.write_text(text, encoding="utf-8")
+
+    print("assistant section patch ok")
+    print(f"backup: {BACKUP_PATH}")
+    print(f"updated: {APP_PATH}")
+
+
+if __name__ == "__main__":
+    main()

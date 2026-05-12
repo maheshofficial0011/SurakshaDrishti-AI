@@ -1,0 +1,83 @@
+SurakshaDrishti AI — Full System Start Guide
+Team: TriNetra
+Mode: Final MVP
+
+Run these in 3 separate PowerShell terminals.
+
+------------------------------------------------------------
+TERMINAL 1 — BACKEND
+------------------------------------------------------------
+cd E:\Copycat2
+.\start_backend.ps1
+
+Backend URL:
+http://127.0.0.1:8000
+
+API Docs:
+http://127.0.0.1:8000/docs
+
+
+------------------------------------------------------------
+TERMINAL 2 — FRONTEND DASHBOARD
+------------------------------------------------------------
+cd E:\Copycat2
+.\start_frontend.ps1
+
+Dashboard URL:
+http://localhost:5173/
+
+
+------------------------------------------------------------
+TERMINAL 3 — AI CAMERA PIPELINE
+------------------------------------------------------------
+cd E:\Copycat2
+.\start_pipeline.ps1
+
+This starts:
+- webcam
+- YOLO object detection
+- person tracking
+- event engine
+- snapshot evidence
+- dashboard live feed stream
+
+
+------------------------------------------------------------
+FINAL DEMO FLOW
+------------------------------------------------------------
+1. Open dashboard
+2. Check Overview
+3. Open Live Feed
+4. Show object detection and person tracking
+5. Trigger SOS from SOS Control
+6. Confirm SOS pinned at top
+7. Open Authority
+8. Assign unit
+9. Mark Running
+10. Resolve incident
+11. Confirm active emergency banner disappears
+12. Ask AI Assistant:
+   - system health
+   - show pending incidents
+   - what should I do next?
+   - how to demo?
+
+
+------------------------------------------------------------
+QUICK HEALTH CHECK
+------------------------------------------------------------
+Backend:
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
+
+Dispatch Summary:
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/dispatches/summary"
+
+Frontend Build:
+cd E:\Copycat2\frontend\dashboard
+npm run build
+
+
+------------------------------------------------------------
+STOP SYSTEM
+------------------------------------------------------------
+Press CTRL + C in each terminal.
