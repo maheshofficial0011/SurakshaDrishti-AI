@@ -1,29 +1,43 @@
-# Secrets
-.env
-
-# Python environment
+# Python
 venv/
+.venv/
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+*.log
 
-# Node
-node_modules/
-dist/
+# Node / frontend
+frontend/dashboard/node_modules/
+frontend/dashboard/dist/
+frontend/dashboard/.vite/
 
-# AI model files
-*.pt
-*.onnx
-*.engine
-models/
+# Backups
+_final_backups/
+*_backup*
+*.backup*
+*.bak
 
-# Runtime data
-recordings/
-database/*.db
-database/*.sqlite
-database/*.sqlite3
+# Cache
+.pytest_cache/
+.mypy_cache/
+.cache/
 
-# Large media
+# Recordings / generated media
+recordings/clips/
+recordings/snapshots/
 *.mp4
 *.avi
 *.mov
-*.mkv
+
+# Environment / secrets
+.env
+.env.local
+*.key
+*.pem
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
