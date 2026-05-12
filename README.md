@@ -1,131 +1,90 @@
-# SurakshaNet AI
+# SurakshaDrishti AI
 
-SurakshaNet AI is a local real-time AI surveillance MVP built for public-safety monitoring using computer vision, event rules, a FastAPI backend, SQLite storage, WebSocket alerts, and a professional React dashboard.
-
-The system runs locally on Windows and uses a webcam as the live video source.
-
----
-
-## Project Status
-
-Current status:
-
-```text
-Final MVP Stabilization
-```
-
-This project is focused on a stable, working surveillance MVP rather than a large enterprise surveillance platform.
+**Team:** TriNetra  
+**Mode:** Final MVP  
+**Platform:** Local Windows Real-Time AI Surveillance Prototype
 
 ---
 
-## Core Features
+## Project Overview
 
-- Live webcam surveillance
-- YOLOv8n person/general object detection
-- Stable person tracking
-- Intrusion detection
-- Loitering detection
-- Crowd detection
-- Event Engine V2 without PPE
-- FastAPI backend
-- SQLite event database
-- WebSocket realtime alerts
-- Professional React dashboard
-- Login authentication
-- Event analytics
-- JSON / CSV report export
-- Daily summary export
-- Alert snapshot evidence
-- Smooth CPU performance mode
-- Dashboard settings panel
-- Reviewed / unreviewed alert status in dashboard
+SurakshaDrishti AI is a local real-time public safety surveillance prototype.
+
+It uses a live webcam, AI object detection, person tracking, alerts, SOS emergency reporting, heatmap analytics, and authority response workflow.
+
+The system is designed as a command-center style dashboard where operators can monitor live video, review alerts, trigger SOS, assign response units, and resolve incidents.
 
 ---
 
-## MVP Scope
+## Main Features
 
-Included in MVP:
-
-```text
-Live Camera → Detection → Tracking → Event Rules → Backend → Database → WebSocket → Dashboard → Reports
-```
-
-Excluded from current MVP:
-
-- PPE detection
-- Multi-camera support
-- Face recognition
-- Cloud deployment
-- YOLO-World live weapon detection
-- Mobile app
-- Advanced AI reasoning layer
-- Production-grade authentication
-
-These are intentionally excluded to keep the MVP stable, fast, and demo-ready.
+- Live webcam feed
+- AI object detection using YOLOv8
+- Person tracking with stable IDs
+- Real-time dashboard
+- Alert feed
+- Pinned SOS emergency alerts
+- SOS emergency form
+- Authority Response Center
+- Dispatch workflow:
+  - Pending
+  - Assigned
+  - Running
+  - Resolved
+- Heatmap section
+- Analytics section
+- Local AI assistant
+- Snapshot evidence support
+- Professional command-center UI
+- CPU-friendly final MVP mode
 
 ---
 
 ## Tech Stack
 
-### AI / Computer Vision
-
-- Python
-- OpenCV
-- Ultralytics YOLOv8n
-- Lightweight tracking logic
-- Rule-based Event Engine V2
-
 ### Backend
 
+- Python
 - FastAPI
-- Uvicorn
 - SQLite
-- WebSocket
-- Static file serving for alert snapshots
+- OpenCV
+- Ultralytics YOLOv8
+- REST APIs
 
 ### Frontend
 
 - React
 - Vite
 - JavaScript
-- Professional dark dashboard UI
+- CSS styling inside App.jsx
+
+### AI / Computer Vision
+
+- YOLOv8n
+- OpenCV
+- Custom lightweight person tracker
+- Rule-based event engine
 
 ---
 
-## Project Structure
+## Folder Structure
 
-```text
-SurakshaNet-AI/
-│
-├── ai_engine/
-│   └── inference/
-│       └── detector.py
-│
-├── alert_system/
-│   └── dispatcher.py
+```txt
+E:\Copycat2
 │
 ├── backend/
 │   └── app/
 │       ├── api/
-│       │   ├── router.py
-│       │   └── routes/
-│       │       ├── analytics.py
-│       │       ├── auth.py
-│       │       ├── events.py
-│       │       └── reports.py
-│       ├── database.py
-│       ├── main.py
 │       ├── services/
-│       │   └── tracking_service.py
-│       └── websocket_manager.py
-│
-├── event_engine/
-│   └── engine.py
+│       ├── database/
+│       └── main.py
 │
 ├── frontend/
 │   └── dashboard/
-│       └── src/
-│           └── App.jsx
+│       ├── src/
+│       │   └── App.jsx
+│       ├── package.json
+│       └── vite.config.js
 │
 ├── pipelines/
 │   └── tracking_pipeline.py
@@ -134,336 +93,221 @@ SurakshaNet-AI/
 │   └── bytetrack/
 │       └── tracker.py
 │
-├── docs/
-│   ├── demo_guide.md
-│   └── screenshots/
+├── event_engine/
+│   └── engine.py
 │
-├── scripts/
-│   └── run_demo_windows.md
+├── ai_engine/
+│   └── inference/
+│       └── detector.py
 │
 ├── recordings/
-│   └── snapshots/
+│   ├── snapshots/
+│   └── clips/
 │
+├── start_backend.ps1
+├── start_frontend.ps1
+├── start_pipeline.ps1
+├── START_FULL_SYSTEM.txt
 └── README.md
-```
 
----
 
-## Screenshots
+How to Run the Project
+Run the project in three separate PowerShell terminals.
 
-### Login Screen
-
-![Login Screen](docs/screenshots/01_login_screen.png)
-
-### Command Dashboard
-
-![Dashboard Home](docs/screenshots/02_dashboard_home.png)
-
-### Live Feed and Alerts
-
-![Live Feed and Alerts](docs/screenshots/03_live_feed_alerts.png)
-
-### Test Alert
-
-![Test Alert](docs/screenshots/04_test_alert.png)
-
-### Snapshot Evidence
-
-![Snapshot Alert](docs/screenshots/05_snapshot_alert.png)
-
-### Analytics and Reports
-
-![Analytics and Reports](docs/screenshots/06_analytics_report.png)
-
-### Settings Panel
-
-![Settings Panel](docs/screenshots/07_settings_panel.png)
-
----
-
----
-
-## Setup Instructions
-
-### 1. Clone or open project
-
-```powershell
-cd E:\Copycat2
-```
-
-### 2. Create and activate Python virtual environment
-
-```powershell
-python -m venv venv
-venv\Scripts\activate
-```
-
-### 3. Install Python dependencies
-
-```powershell
-pip install -r requirements.txt
-```
-
-If `requirements.txt` is not fully updated, install core dependencies manually:
-
-```powershell
-pip install fastapi uvicorn opencv-python ultralytics requests python-multipart imageio imageio-ffmpeg
-```
-
-### 4. Install frontend dependencies
-
-```powershell
-cd frontend\dashboard
-npm install
-```
-
----
-
-## Environment Variables
-
-Create a `.env` file in project root:
-
-```env
-DASHBOARD_USERNAME=admin
-DASHBOARD_PASSWORD=admin123
-DASHBOARD_TOKEN=surakshanet-demo-token
-```
-
-Demo login:
-
-```text
-Username: admin
-Password: admin123
-```
-
----
-
-## Run Project
-
-Open three terminals.
-
----
-
-### Terminal 1 — Backend
-
-```powershell
-cd E:\Copycat2
-venv\Scripts\activate
-uvicorn backend.app.main:app --reload
-```
-
+Terminal 1 — Start Backend
+cd E:\Copycat2.\start_backend.ps1
 Backend runs at:
-
-```text
 http://127.0.0.1:8000
-```
+API docs:
+http://127.0.0.1:8000/docs
 
-Health check:
+Terminal 2 — Start Frontend Dashboard
+cd E:\Copycat2.\start_frontend.ps1
+Open dashboard:
+http://localhost:5173/
 
-```text
-http://127.0.0.1:8000/health
-```
-
----
-
-### Terminal 2 — AI Pipeline
-
-```powershell
-cd E:\Copycat2
-venv\Scripts\activate
-python pipelines/tracking_pipeline.py
-```
-
+Terminal 3 — Start AI Camera Pipeline
+cd E:\Copycat2.\start_pipeline.ps1
 This starts:
 
-- webcam capture
-- YOLO detection
-- tracking
-- event engine
-- backend event sending
-- snapshot evidence saving
-- dashboard frame streaming
 
-Press `q` in the camera window to stop.
+Webcam capture
 
----
 
-### Terminal 3 — Dashboard
+YOLO object detection
 
-```powershell
-cd E:\Copycat2\frontend\dashboard
-npm run dev
-```
 
-Open manually in Chrome:
+Person tracking
 
-```text
-http://localhost:5173
-```
 
-Do not Ctrl+Click from VS Code if it opens inside VS Code Simple Browser.
+Event engine
 
----
 
-## Main API Endpoints
+Snapshot evidence
 
-### Health
 
-```text
-GET /health
-```
+Live camera stream to dashboard
 
-### Events
 
-```text
-GET /events
-POST /events
-POST /events/test
-DELETE /events
-```
 
-### WebSocket
+Health Check Commands
+Backend Health
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
 
-```text
-WS /ws/events
-```
+Dispatch Summary
+Invoke-RestMethod -Uri "http://127.0.0.1:8000/dispatches/summary"
 
-### Live Video
+Trigger SOS Manually
+Invoke-RestMethod -Method Post `  -Uri "http://127.0.0.1:8000/sos" `  -ContentType "application/json" `  -Body '{"user_name":"Demo User","phone":"demo","incident_location":"Demo Laptop Location","incident_type":"Medical Emergency","help_needed":["POLICE","AMBULANCE"],"details":"Manual SOS test"}'
 
-```text
-POST /frame
-GET /video_feed
-```
+Frontend Build Check
+cd E:\Copycat2\frontend\dashboardnpm run build
 
-### Analytics
+Demo Flow
 
-```text
-GET /analytics/summary
-GET /analytics/by-type
-GET /analytics/risk-zones
-```
 
-### Reports
+Start backend.
 
-```text
-GET /reports/events/json
-GET /reports/events/csv
-GET /reports/daily-summary/json
-```
 
-### Auth
+Start frontend.
 
-```text
-POST /auth/login
-GET /auth/verify
-```
 
----
+Start AI pipeline.
 
-## Dashboard Features
 
-The dashboard includes:
+Open dashboard.
 
-- Secure login screen
-- Live camera feed
-- WebSocket/API status indicators
-- Operator status row
-- Demo mode banner
-- Event filters
-- Test alert button
-- Analytics cards
-- Incident summary panel
-- Camera/system health panel
-- Alert feed
-- Snapshot preview
-- Mark reviewed / unreviewed
-- JSON and CSV export buttons
-- Daily summary export
-- Settings panel
-- Dark/light mode switch
 
----
+Open Live Feed.
 
-## Event Logic
 
-### Intrusion
+Show object detection.
 
-Detects when a tracked person remains inside a restricted zone for a configured duration.
 
-### Loitering
+Show person tracking.
 
-Detects when the same tracked person remains near the same location for a configured time.
 
-### Crowd Alert
+Open SOS Control.
 
-Detects when multiple tracked people stay inside a zone for a configured duration.
 
-### Weapon Detection
+Trigger SOS alert.
 
-Weapon AI is disabled in the final MVP because open-vocabulary YOLO-World was too slow on CPU and a proper custom weapon model is not included.
 
----
+Confirm SOS alert is pinned at top.
 
-## Performance Mode
 
-The project is optimized for CPU-only laptop demo.
+Open Authority Response Center.
 
-Recommended pipeline settings:
 
-```python
-DETECTION_EVERY_N_FRAMES = 6
-STREAM_EVERY_N_FRAMES = 3
-ENABLE_VIDEO_CLIPS = False
-DRAW_NON_PERSON_OBJECTS = False
-```
+Assign unit.
 
-Snapshots are enabled.
 
-Video clips are disabled by default for smooth live performance.
+Mark Running.
 
----
 
-## Demo Guide
+Resolve incident.
 
-Detailed demo instructions are available here:
 
-```text
-docs/demo_guide.md
-```
+Confirm emergency banner disappears.
 
-Quick demo flow:
 
-```text
-Login → Show live feed → Trigger test alert → Trigger real intrusion → Show snapshot → Show analytics → Export report
-```
+Ask AI Assistant:
 
----
 
-## Known Limitations
+system health
 
-- Single webcam only
-- CPU-only performance
-- No real PPE detection
-- No production-grade weapon detection
-- No cloud deployment
-- SQLite is used for local prototype storage
-- Authentication is demo-level only
-- Dashboard reviewed/unreviewed state is frontend-local only
 
----
+show pending incidents
 
-## Final MVP Goal
 
-SurakshaNet AI is designed as a polished, stable, local AI surveillance MVP.
+what should I do next?
 
-The goal is not to be an enterprise-grade CCTV platform yet. The goal is to demonstrate a complete working pipeline:
 
-```text
-AI Detection → Tracking → Event Intelligence → Backend → Realtime Dashboard → Reports
-```
+how to demo?
 
----
 
-## License
 
-For educational and demonstration use.
+
+
+Current Final MVP Status
+Backend API: WorkingFrontend Dashboard: WorkingLive Feed: WorkingObject Detection: WorkingPerson Tracking: WorkingSOS Alert: WorkingPinned SOS Alert: WorkingAuthority Workflow: WorkingHeatmap: WorkingAssistant: WorkingFinal Backup: CreatedRun Scripts: Created
+
+Known Limitations
+This is a local MVP prototype, not a production deployment.
+Current limitations:
+
+
+Runs locally on laptop.
+
+
+CPU-only performance depends on hardware.
+
+
+YOLOv8n is used for lightweight detection.
+
+
+PPE detection is excluded in final MVP.
+
+
+Weapon detection is not enabled as a heavy real-time CPU model.
+
+
+Video clips are disabled by default for performance.
+
+
+Tracking is optimized mainly for persons.
+
+
+SOS and authority workflow are demo-realistic, not connected to actual emergency services.
+
+
+
+Future Scope
+
+
+Multi-camera support
+
+
+Real IP camera / CCTV integration
+
+
+Mobile app integration
+
+
+Real notification system
+
+
+Role-based authentication
+
+
+Cloud deployment
+
+
+GPU acceleration
+
+
+Advanced pose/action detection
+
+
+Real weapon detection model
+
+
+Audio distress detection
+
+
+Production-grade incident management
+
+
+Real GIS map integration
+
+
+Authority mobile dashboard
+
+
+
+Team
+Project: SurakshaDrishti AI
+Team: TriNetra
+
+Final Note
+SurakshaDrishti AI demonstrates how AI, computer vision, dashboards, SOS workflows, and authority response management can be combined into a local public-safety command-center prototype.
