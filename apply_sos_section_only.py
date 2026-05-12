@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — SOS Control Section Only Patch
+SurakshaDrishti AI — SOS Control Section Only Patch
 
 Purpose:
 - Replace only the SOS Control placeholder with a realistic SOS form.

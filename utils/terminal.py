@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Clean Terminal Utilities
+SurakshaDrishti AI — Clean Terminal Utilities
 
 Purpose:
 - Keep runtime terminal output clean and professional.
@@ -21,7 +21,7 @@ def now_time():
 def print_banner():
     print()
     print(LINE)
-    print("🛡️  SurakshaNet AI — Final MVP Runtime")
+    print("🛡️  SurakshaDrishti AI — Final MVP Runtime")
     print(LINE)
     print("Mode         : Smooth CPU Demo")
     print("Detector     : YOLOv8n")
@@ -80,7 +80,7 @@ def print_alert(event):
 def print_shutdown():
     print()
     print(LINE)
-    print("🛑 SurakshaNet AI shutting down...")
+    print("🛑 SurakshaDrishti AI shutting down...")
     print("✔ Camera released")
     print("✔ Pipeline stopped safely")
     print("✔ Final MVP demo session ended")

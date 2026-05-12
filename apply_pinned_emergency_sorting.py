@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Pinned Emergency Sorting Patch
+SurakshaDrishti AI — Pinned Emergency Sorting Patch
 
 Purpose:
 - Keep unresolved SOS / CRITICAL / HIGH incidents pinned at the top.

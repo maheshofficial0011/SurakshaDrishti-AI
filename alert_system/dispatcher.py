@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Alert Dispatcher
+SurakshaDrishti AI — Alert Dispatcher
 
 Purpose:
 - Central alert dispatch point used by the Event Engine.

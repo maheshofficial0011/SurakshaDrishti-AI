@@ -1,0 +1,858 @@
+"""
+SurakshaDrishti AI — Assistant Section Chat Patch
+
+Purpose:
+- Upgrade the AI Assistant sidebar section from info panel to full assistant workspace.
+- Keep floating bottom-right assistant unchanged.
+- Use existing dashboard state only:
+  events, dispatches, heatmapData, backendAnalytics.
+- No backend changes.
+- No new packages.
+- No architecture redesign.
+
+Safety:
+- Only modifies frontend/dashboard/src/App.jsx.
+- Creates backup before editing.
+"""
+
+from pathlib import Path
+
+
+APP_PATH = Path("frontend/dashboard/src/App.jsx")
+BACKUP_PATH = Path("frontend/dashboard/src/App.jsx.backup_before_assistant_section_chat")
+
+
+def replace_once(text: str, old: str, new: str, label: str) -> str:
+    if old not in text:
+        raise RuntimeError(f"Could not find expected block: {label}")
+    return text.replace(old, new, 1)
+
+
+def main():
+    if not APP_PATH.exists():
+        raise FileNotFoundError(APP_PATH)
+
+    source = APP_PATH.read_text(encoding="utf-8")
+
+    if not BACKUP_PATH.exists():
+        BACKUP_PATH.write_text(source, encoding="utf-8")
+
+    text = source
+
+    old_component_start = '''function AssistantSection({
+    events,
+    dispatches,
+    heatmapData,
+    backendAnalytics,
+}) {'''
+
+    new_component_start = '''function AssistantSection({
+    events,
+    dispatches,
+    heatmapData,
+    backendAnalytics,
+}) {
+    const [sectionAssistantInput, setSectionAssistantInput] = useState("")
+    const [sectionAssistantMessages, setSectionAssistantMessages] = useState([
+        {
+            role: "assistant",
+            text:
+                "Command Assistant online. I can analyze alerts, SOS incidents, authority workflow, heatmap risk, and suggest the next operator action.",
+        },
+    ])'''
+
+    text = replace_once(
+        text,
+        old_component_start,
+        new_component_start,
+        "AssistantSection state",
+    )
+
+    old_component = '''function AssistantSection({
+    events,
+    dispatches,
+    heatmapData,
+    backendAnalytics,
+}) {
+    const [sectionAssistantInput, setSectionAssistantInput] = useState("")
+    const [sectionAssistantMessages, setSectionAssistantMessages] = useState([
+        {
+            role: "assistant",
+            text:
+                "Command Assistant online. I can analyze alerts, SOS incidents, authority workflow, heatmap risk, and suggest the next operator action.",
+        },
+    ])
+    const latestEvent = events && events.length > 0 ? events[0] : null
+
+    const pendingCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "PENDING"
+    ).length
+
+    const assignedCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "ASSIGNED"
+    ).length
+
+    const runningCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "DISPATCHED"
+    ).length
+
+    const resolvedCount = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "RESOLVED"
+    ).length
+
+    const unresolvedSosCount = (events || []).filter((event) => {
+        if (event.type !== "SOS_ALERT") return false
+
+        const relatedDispatches = (dispatches || []).filter(
+            (dispatch) => Number(dispatch.event_id) === Number(event.db_id)
+        )
+
+        if (relatedDispatches.length === 0) return true
+
+        return relatedDispatches.some((dispatch) => dispatch.status !== "RESOLVED")
+    }).length
+
+    const suggestedAction =
+        pendingCount > 0
+            ? "Open Authority and assign pending incidents."
+            : runningCount > 0
+                ? "Monitor running responses and resolve after action is complete."
+                : unresolvedSosCount > 0
+                    ? "Review unresolved SOS alerts and confirm linked response units."
+                    : "System is stable. Continue monitoring live feed and alerts."
+
+    return (
+        <Panel title="🤖 SurakshaNet Command Assistant">
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+                    gap: "18px",
+                }}
+            >
+                <div
+                    style={{
+                        background: "#111827",
+                        border: "1px solid #2563eb",
+                        borderRadius: "18px",
+                        padding: "18px",
+                    }}
+                >
+                    <div
+                        style={{
+                            color: "#bfdbfe",
+                            fontSize: "12px",
+                            fontWeight: "bold",
+                            marginBottom: "8px",
+                            letterSpacing: "0.5px",
+                        }}
+                    >
+                        LOCAL DASHBOARD ASSISTANT
+                    </div>
+
+                    <h2 style={{ margin: "0 0 10px", color: "#e5e7eb" }}>
+                        Ask the floating 🤖 assistant about your live system.
+                    </h2>
+
+                    <p style={{ color: "#cbd5e1", lineHeight: 1.7 }}>
+                        The assistant uses the current dashboard state including alerts,
+                        SOS incidents, heatmap risk, and authority response workflow.
+                        Use the floating button at the bottom-right corner to open the
+                        live chat panel.
+                    </p>
+
+                    <div
+                        style={{
+                            marginTop: "16px",
+                            background: "#020617",
+                            border: "1px solid #334155",
+                            borderRadius: "14px",
+                            padding: "14px",
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#94a3b8",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "10px",
+                            }}
+                        >
+                            TRY ASKING
+                        </div>
+
+                        <div
+                            style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                                gap: "10px",
+                            }}
+                        >
+                            {[
+                                "What is the latest alert?",
+                                "Show pending incidents",
+                                "What is the current risk?",
+                                "What should I do next?",
+                                "Show unresolved SOS",
+                                "Open Authority",
+                            ].map((prompt) => (
+                                <div
+                                    key={prompt}
+                                    style={{
+                                        background: "#111827",
+                                        border: "1px solid #334155",
+                                        borderRadius: "12px",
+                                        padding: "10px",
+                                        color: "#e5e7eb",
+                                        fontWeight: "bold",
+                                        fontSize: "13px",
+                                    }}
+                                >
+                                    “{prompt}”
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            marginTop: "16px",
+                            background: "#1e3a8a",
+                            border: "1px solid #60a5fa",
+                            borderRadius: "14px",
+                            padding: "14px",
+                            color: "#dbeafe",
+                            fontWeight: "bold",
+                        }}
+                    >
+                        Use the bottom-right 🤖 button to start chatting.
+                    </div>
+                </div>
+
+                <div
+                    style={{
+                        display: "grid",
+                        gap: "12px",
+                    }}
+                >
+                    <InfoTile
+                        title="Total Events"
+                        value={backendAnalytics?.total_events ?? events?.length ?? 0}
+                        color="#38bdf8"
+                    />
+
+                    <InfoTile
+                        title="Heatmap Risk"
+                        value={heatmapData?.risk_level || "UNKNOWN"}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Pending Incidents"
+                        value={pendingCount}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Running Responses"
+                        value={runningCount}
+                        color="#22c55e"
+                    />
+
+                    <InfoTile
+                        title="Resolved Incidents"
+                        value={resolvedCount}
+                        color="#64748b"
+                    />
+
+                    <InfoTile
+                        title="Unresolved SOS"
+                        value={unresolvedSosCount}
+                        color="#dc2626"
+                    />
+
+                    <div
+                        style={{
+                            background: "#111827",
+                            border: "1px solid #334155",
+                            borderRadius: "14px",
+                            padding: "14px",
+                            color: "#cbd5e1",
+                            lineHeight: 1.6,
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#94a3b8",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "7px",
+                            }}
+                        >
+                            SUGGESTED ACTION
+                        </div>
+
+                        <div style={{ color: "#e5e7eb", fontWeight: "bold" }}>
+                            {suggestedAction}
+                        </div>
+                    </div>
+
+                    {latestEvent && (
+                        <div
+                            style={{
+                                background: "#111827",
+                                border: "1px solid #334155",
+                                borderRadius: "14px",
+                                padding: "14px",
+                                color: "#cbd5e1",
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    color: "#94a3b8",
+                                    fontSize: "12px",
+                                    fontWeight: "bold",
+                                    marginBottom: "7px",
+                                }}
+                            >
+                                LATEST ALERT CONTEXT
+                            </div>
+
+                            <div style={{ color: "#e5e7eb", fontWeight: "bold" }}>
+                                {latestEvent.type} — {latestEvent.severity}
+                            </div>
+
+                            <div style={{ marginTop: "6px", fontSize: "13px" }}>
+                                {latestEvent.message}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </Panel>
+    )
+}'''
+
+    new_component = r'''function AssistantSection({
+    events,
+    dispatches,
+    heatmapData,
+    backendAnalytics,
+}) {
+    const [sectionAssistantInput, setSectionAssistantInput] = useState("")
+    const [sectionAssistantMessages, setSectionAssistantMessages] = useState([
+        {
+            role: "assistant",
+            text:
+                "Command Assistant online. I can analyze alerts, SOS incidents, authority workflow, heatmap risk, and suggest the next operator action.",
+        },
+    ])
+
+    const latestEvent = events && events.length > 0 ? events[0] : null
+
+    const pendingDispatches = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "PENDING"
+    )
+
+    const assignedDispatches = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "ASSIGNED"
+    )
+
+    const runningDispatches = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "DISPATCHED"
+    )
+
+    const resolvedDispatches = (dispatches || []).filter(
+        (dispatch) => dispatch.status === "RESOLVED"
+    )
+
+    const unresolvedSosEvents = (events || []).filter((event) => {
+        if (event.type !== "SOS_ALERT") return false
+
+        const relatedDispatches = (dispatches || []).filter(
+            (dispatch) => Number(dispatch.event_id) === Number(event.db_id)
+        )
+
+        if (relatedDispatches.length === 0) return true
+
+        return relatedDispatches.some((dispatch) => dispatch.status !== "RESOLVED")
+    })
+
+    const totalEvents = backendAnalytics?.total_events ?? events?.length ?? 0
+    const riskLevel = heatmapData?.risk_level || "UNKNOWN"
+    const riskScore = heatmapData?.risk_score ?? "N/A"
+
+    const suggestedAction =
+        pendingDispatches.length > 0
+            ? "Assign pending authority incidents first."
+            : runningDispatches.length > 0
+                ? "Monitor running responses and resolve completed incidents."
+                : unresolvedSosEvents.length > 0
+                    ? "Review unresolved SOS alerts and confirm linked response units."
+                    : "System is stable. Continue monitoring live feed and alerts."
+
+    function formatDispatch(dispatch, index) {
+        const statusLabel = getAuthorityStatusLabel
+            ? getAuthorityStatusLabel(dispatch.status)
+            : dispatch.status === "DISPATCHED"
+                ? "RUNNING"
+                : dispatch.status || "PENDING"
+
+        return `${index + 1}. ${dispatch.dispatch_id} — ${dispatch.unit_type} — ${dispatch.event_type} — ${statusLabel} — ${dispatch.location_label}`
+    }
+
+    function createAssistantReply(query) {
+        const lower = String(query || "").toLowerCase()
+
+        if (lower.includes("latest") || lower.includes("last alert")) {
+            if (!latestEvent) {
+                return "No alerts are currently available."
+            }
+
+            return [
+                `Latest Alert: ${latestEvent.type || "UNKNOWN"}`,
+                `Severity: ${latestEvent.severity || "INFO"}`,
+                `Location: ${latestEvent.location_label || latestEvent.camera_location || "Unknown"}`,
+                `Source: ${latestEvent.source || "camera_ai"}`,
+                "",
+                latestEvent.message || "No message available.",
+            ].join("\\n")
+        }
+
+        if (lower.includes("pending")) {
+            if (pendingDispatches.length === 0) {
+                return "No pending authority incidents right now."
+            }
+
+            return [
+                `Pending Authority Incidents: ${pendingDispatches.length}`,
+                ...pendingDispatches.slice(0, 8).map(formatDispatch),
+                "",
+                "Recommended action: assign these units from the Authority section.",
+            ].join("\\n")
+        }
+
+        if (lower.includes("assigned")) {
+            if (assignedDispatches.length === 0) {
+                return "No assigned incidents are waiting for running/dispatch status."
+            }
+
+            return [
+                `Assigned Incidents: ${assignedDispatches.length}`,
+                ...assignedDispatches.slice(0, 8).map(formatDispatch),
+                "",
+                "Recommended action: mark assigned units as Running when they are en route.",
+            ].join("\\n")
+        }
+
+        if (lower.includes("running") || lower.includes("dispatched")) {
+            if (runningDispatches.length === 0) {
+                return "No authority units are currently Running."
+            }
+
+            return [
+                `Running Responses: ${runningDispatches.length}`,
+                ...runningDispatches.slice(0, 8).map(formatDispatch),
+                "",
+                "Recommended action: resolve incidents after response is completed.",
+            ].join("\\n")
+        }
+
+        if (lower.includes("resolved")) {
+            return `Resolved incidents: ${resolvedDispatches.length}.`
+        }
+
+        if (lower.includes("sos") || lower.includes("emergency")) {
+            if (unresolvedSosEvents.length === 0) {
+                return "No unresolved SOS alerts right now."
+            }
+
+            const topSos = unresolvedSosEvents[0]
+
+            return [
+                `Unresolved SOS Alerts: ${unresolvedSosEvents.length}`,
+                `Top SOS Type: ${topSos.incident_type || topSos.type}`,
+                `Location: ${topSos.incident_location || topSos.location_label || "Unknown"}`,
+                `Help Needed: ${
+                    Array.isArray(topSos.help_needed)
+                        ? topSos.help_needed.join(", ")
+                        : topSos.help_needed || "Authority response required"
+                }`,
+                "",
+                "Recommended action: open Authority, assign linked units, mark Running, then Resolve.",
+            ].join("\\n")
+        }
+
+        if (lower.includes("risk") || lower.includes("heatmap")) {
+            return [
+                `Current Heatmap Risk: ${riskLevel}`,
+                `Risk Score: ${riskScore}/100`,
+                `Total Events: ${totalEvents}`,
+                `Latest Heatmap Event: ${heatmapData?.latest_event_type || "NONE"}`,
+                `Demo Location: ${heatmapData?.location?.label || "Demo Laptop Location"}`,
+            ].join("\\n")
+        }
+
+        if (lower.includes("summary") || lower.includes("status")) {
+            return [
+                "System Summary:",
+                `Total Events: ${totalEvents}`,
+                `Risk Level: ${riskLevel}`,
+                `Pending: ${pendingDispatches.length}`,
+                `Assigned: ${assignedDispatches.length}`,
+                `Running: ${runningDispatches.length}`,
+                `Resolved: ${resolvedDispatches.length}`,
+                `Unresolved SOS: ${unresolvedSosEvents.length}`,
+                "",
+                `Suggested Action: ${suggestedAction}`,
+            ].join("\\n")
+        }
+
+        if (
+            lower.includes("what should") ||
+            lower.includes("next") ||
+            lower.includes("recommend")
+        ) {
+            return `Recommended next action: ${suggestedAction}`
+        }
+
+        if (lower.includes("help") || lower.includes("commands")) {
+            return [
+                "You can ask:",
+                "• What is the latest alert?",
+                "• Show pending incidents",
+                "• Show running responses",
+                "• Show unresolved SOS",
+                "• What is the current risk?",
+                "• Give system summary",
+                "• What should I do next?",
+            ].join("\\n")
+        }
+
+        return [
+            "I did not find an exact command, but I can help with live system operations.",
+            "",
+            "Try asking:",
+            "• What should I do next?",
+            "• Show pending incidents",
+            "• What is the current risk?",
+            "• Show unresolved SOS",
+        ].join("\\n")
+    }
+
+    function sendSectionAssistantMessage(message = sectionAssistantInput) {
+        const cleanMessage = String(message || "").trim()
+
+        if (!cleanMessage) {
+            return
+        }
+
+        const reply = createAssistantReply(cleanMessage)
+
+        setSectionAssistantMessages((prev) => [
+            ...prev,
+            {
+                role: "user",
+                text: cleanMessage,
+            },
+            {
+                role: "assistant",
+                text: reply,
+            },
+        ])
+
+        setSectionAssistantInput("")
+    }
+
+    const quickPrompts = [
+        "Give system summary",
+        "What should I do next?",
+        "Show pending incidents",
+        "Show unresolved SOS",
+        "What is the current risk?",
+        "Show running responses",
+    ]
+
+    return (
+        <Panel title="🤖 SurakshaNet Command Assistant">
+            <div
+                style={{
+                    display: "grid",
+                    gridTemplateColumns: "minmax(0, 1.35fr) minmax(320px, 0.65fr)",
+                    gap: "18px",
+                }}
+            >
+                <div
+                    style={{
+                        background: "#020617",
+                        border: "1px solid #2563eb",
+                        borderRadius: "18px",
+                        overflow: "hidden",
+                        minHeight: "620px",
+                        display: "flex",
+                        flexDirection: "column",
+                    }}
+                >
+                    <div
+                        style={{
+                            padding: "16px",
+                            background: "linear-gradient(90deg, #1e3a8a, #020617)",
+                            borderBottom: "1px solid #1e293b",
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#bfdbfe",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "6px",
+                                letterSpacing: "0.5px",
+                            }}
+                        >
+                            OPERATOR CHAT WORKSPACE
+                        </div>
+
+                        <div style={{ color: "white", fontSize: "20px", fontWeight: "bold" }}>
+                            Ask about alerts, risk, SOS, and authority workflow
+                        </div>
+                    </div>
+
+                    <div
+                        style={{
+                            padding: "12px",
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "8px",
+                            borderBottom: "1px solid #1e293b",
+                        }}
+                    >
+                        {quickPrompts.map((prompt) => (
+                            <button
+                                key={prompt}
+                                onClick={() => sendSectionAssistantMessage(prompt)}
+                                style={{
+                                    background: "#111827",
+                                    color: "#cbd5e1",
+                                    border: "1px solid #334155",
+                                    borderRadius: "999px",
+                                    padding: "8px 11px",
+                                    fontSize: "12px",
+                                    fontWeight: "bold",
+                                }}
+                            >
+                                {prompt}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div
+                        className="scroll-soft"
+                        style={{
+                            flex: 1,
+                            overflowY: "auto",
+                            padding: "16px",
+                            display: "grid",
+                            gap: "12px",
+                            alignContent: "start",
+                        }}
+                    >
+                        {sectionAssistantMessages.map((message, index) => (
+                            <div
+                                key={`${message.role}-${index}`}
+                                style={{
+                                    justifySelf: message.role === "user" ? "end" : "start",
+                                    maxWidth: "84%",
+                                    background:
+                                        message.role === "user" ? "#2563eb" : "#111827",
+                                    color: "white",
+                                    border:
+                                        message.role === "user"
+                                            ? "1px solid #93c5fd"
+                                            : "1px solid #334155",
+                                    borderRadius: "15px",
+                                    padding: "11px 13px",
+                                    whiteSpace: "pre-wrap",
+                                    lineHeight: 1.55,
+                                    fontSize: "14px",
+                                }}
+                            >
+                                {message.text}
+                            </div>
+                        ))}
+                    </div>
+
+                    <form
+                        onSubmit={(event) => {
+                            event.preventDefault()
+                            sendSectionAssistantMessage()
+                        }}
+                        style={{
+                            padding: "14px",
+                            borderTop: "1px solid #1e293b",
+                            display: "flex",
+                            gap: "10px",
+                        }}
+                    >
+                        <input
+                            value={sectionAssistantInput}
+                            onChange={(event) =>
+                                setSectionAssistantInput(event.target.value)
+                            }
+                            placeholder="Ask: What should I do next?"
+                            style={{
+                                flex: 1,
+                                background: "#111827",
+                                color: "white",
+                                border: "1px solid #334155",
+                                borderRadius: "12px",
+                                padding: "12px",
+                                fontWeight: "bold",
+                                minWidth: 0,
+                            }}
+                        />
+
+                        <button
+                            type="submit"
+                            style={{
+                                background: "#2563eb",
+                                color: "white",
+                                border: "1px solid #93c5fd",
+                                borderRadius: "12px",
+                                padding: "0 18px",
+                                fontWeight: "bold",
+                            }}
+                        >
+                            Send
+                        </button>
+                    </form>
+                </div>
+
+                <div style={{ display: "grid", gap: "12px", alignContent: "start" }}>
+                    <InfoTile
+                        title="Total Events"
+                        value={totalEvents}
+                        color="#38bdf8"
+                    />
+
+                    <InfoTile
+                        title="Heatmap Risk"
+                        value={riskLevel}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Risk Score"
+                        value={`${riskScore}/100`}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Pending"
+                        value={pendingDispatches.length}
+                        color="#f59e0b"
+                    />
+
+                    <InfoTile
+                        title="Assigned"
+                        value={assignedDispatches.length}
+                        color="#38bdf8"
+                    />
+
+                    <InfoTile
+                        title="Running"
+                        value={runningDispatches.length}
+                        color="#22c55e"
+                    />
+
+                    <InfoTile
+                        title="Resolved"
+                        value={resolvedDispatches.length}
+                        color="#64748b"
+                    />
+
+                    <InfoTile
+                        title="Unresolved SOS"
+                        value={unresolvedSosEvents.length}
+                        color="#dc2626"
+                    />
+
+                    <div
+                        style={{
+                            background: "#111827",
+                            border: "1px solid #334155",
+                            borderRadius: "14px",
+                            padding: "14px",
+                            color: "#cbd5e1",
+                            lineHeight: 1.6,
+                        }}
+                    >
+                        <div
+                            style={{
+                                color: "#94a3b8",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                marginBottom: "7px",
+                            }}
+                        >
+                            SUGGESTED ACTION
+                        </div>
+
+                        <div style={{ color: "#e5e7eb", fontWeight: "bold" }}>
+                            {suggestedAction}
+                        </div>
+                    </div>
+
+                    {latestEvent && (
+                        <div
+                            style={{
+                                background: "#111827",
+                                border: "1px solid #334155",
+                                borderRadius: "14px",
+                                padding: "14px",
+                                color: "#cbd5e1",
+                                lineHeight: 1.6,
+                            }}
+                        >
+                            <div
+                                style={{
+                                    color: "#94a3b8",
+                                    fontSize: "12px",
+                                    fontWeight: "bold",
+                                    marginBottom: "7px",
+                                }}
+                            >
+                                LATEST ALERT CONTEXT
+                            </div>
+
+                            <div style={{ color: "#e5e7eb", fontWeight: "bold" }}>
+                                {latestEvent.type} — {latestEvent.severity}
+                            </div>
+
+                            <div style={{ marginTop: "6px", fontSize: "13px" }}>
+                                {latestEvent.message}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </Panel>
+    )
+}'''
+
+    text = replace_once(
+        text,
+        old_component,
+        new_component,
+        "replace AssistantSection component",
+    )
+
+    APP_PATH.write_text(text, encoding="utf-8")
+
+    print("assistant section chat patch ok")
+    print(f"backup: {BACKUP_PATH}")
+    print(f"updated: {APP_PATH}")
+
+
+if __name__ == "__main__":
+    main()

@@ -4,7 +4,7 @@ import time
 
 class EventEngine:
     """
-    SurakshaNet AI — Event Engine V3.1
+    SurakshaDrishti AI — Event Engine V3.1
 
     Purpose:
     Convert stable tracked person objects into meaningful security events.

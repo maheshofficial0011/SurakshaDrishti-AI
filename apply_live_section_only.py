@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Live Feed Section Only Patch
+SurakshaDrishti AI — Live Feed Section Only Patch
 
 Purpose:
 - Replace only the Live Feed placeholder with the real LiveFeedPanel.

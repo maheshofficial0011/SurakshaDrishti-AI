@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Frontend Demo Feature Patch
+SurakshaDrishti AI — Frontend Demo Feature Patch
 
 Purpose:
 - Safely update frontend/dashboard/src/App.jsx.

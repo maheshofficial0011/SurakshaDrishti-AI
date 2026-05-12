@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Heatmap Section Only Patch
+SurakshaDrishti AI — Heatmap Section Only Patch
 
 Purpose:
 - Replace only the Heatmap placeholder with the real HeatmapPanel.

@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Frontend Authority Workflow Patch
+SurakshaDrishti AI — Frontend Authority Workflow Patch
 
 Purpose:
 - Modify only frontend/dashboard/src/App.jsx.

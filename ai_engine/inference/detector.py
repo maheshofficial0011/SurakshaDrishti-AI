@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Final MVP Detector
+SurakshaDrishti AI — Final MVP Detector
 
 Purpose:
 - Load YOLOv8n for person/general object detection.
@@ -46,7 +46,7 @@ except Exception:
 
 class Detector:
     """
-    Unified detector for SurakshaNet AI.
+    Unified detector for SurakshaDrishti AI.
 
     Current final MVP mode:
     - Uses YOLOv8n for person/general object detection.

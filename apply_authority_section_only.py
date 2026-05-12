@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Authority Section Only Patch
+SurakshaDrishti AI — Authority Section Only Patch
 
 Purpose:
 - Replace only the Authority placeholder with the real Authority Response Center.

@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Alerts Section Only Patch
+SurakshaDrishti AI — Alerts Section Only Patch
 
 Purpose:
 - Replace only the Alerts placeholder with the real alert feed.

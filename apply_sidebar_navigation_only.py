@@ -1,5 +1,5 @@
 """
-SurakshaNet AI — Sidebar Navigation Only Patch
+SurakshaDrishti AI — Sidebar Navigation Only Patch
 
 Purpose:
 - Enable sidebar navigation sections safely.
