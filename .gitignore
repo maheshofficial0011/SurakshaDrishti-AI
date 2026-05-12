@@ -41,3 +41,14 @@ recordings/snapshots/
 Thumbs.db
 .vscode/
 .idea/
+
+# Temporary patch/helper scripts
+apply_*.py
+fix_*.py
+patch_*.py
+quick_fix_*.py
+safe_fix_*.py
+remove_*duplicate*.py
+create_final_docs.py
+create_final_backup.py
+debug_detector_output.py
