@@ -1,6 +1,0 @@
-zones:
-  - name: Main Gate
-    box: [100, 100, 400, 400]
-
-  - name: Server Room
-    box: [500, 200, 800, 500]
