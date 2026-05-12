@@ -52,3 +52,22 @@ remove_*duplicate*.py
 create_final_docs.py
 create_final_backup.py
 debug_detector_output.py
+
+# Temporary patch/helper scripts and backups
+apply_*.py
+apply_*.py.backup*
+fix_*.py
+fix_*.py.backup*
+patch_*.py
+patch_*.py.backup*
+quick_fix_*.py
+quick_fix_*.py.backup*
+safe_fix_*.py
+safe_fix_*.py.backup*
+remove_*.py
+remove_*.py.backup*
+create_final_docs.py
+create_final_backup.py
+debug_detector_output.py
+*.backup*
+*.bak
