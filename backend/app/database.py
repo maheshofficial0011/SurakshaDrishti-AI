@@ -1,10 +1,41 @@
-# 🟢 CHANGED: Fixed SQLite event database layer
-# REASON: Previous file had migration code accidentally pasted inside SQL table creation
+"""
+SurakshaNet AI — SQLite Database Layer
 
-import sqlite3
+Purpose:
+- Store surveillance events permanently in SQLite.
+- Support dashboard event history.
+- Support analytics and report exports.
+- Support demo heatmap data.
+- Support mobile SOS demo events.
+- Support authority response dispatch records.
+
+Safety Rules:
+- Do NOT delete existing tables.
+- Do NOT recreate existing tables.
+- Do NOT change existing public function names.
+- Do NOT break old dashboard/event/report behavior.
+- Use CREATE TABLE IF NOT EXISTS for new tables.
+- Use ALTER TABLE only when a column is missing.
+
+This file is intentionally self-contained and conservative because it is used by:
+- backend startup
+- /events route
+- /analytics route
+- /reports route
+- future /sos route
+- future /dispatches route
+"""
+
 import json
+import sqlite3
 from datetime import datetime
 from pathlib import Path
+
+from backend.app.demo_config import get_demo_location
+
+# ---------------------------------------------------------------------
+# Database path
+# ---------------------------------------------------------------------
 
 DB_DIR = Path("database")
 DB_DIR.mkdir(exist_ok=True)
@@ -12,17 +43,104 @@ DB_DIR.mkdir(exist_ok=True)
 DB_PATH = DB_DIR / "surakshanet_events.db"
 
 
+# ---------------------------------------------------------------------
+# Connection helpers
+# ---------------------------------------------------------------------
+
+
 def get_connection():
+    """
+    Return a SQLite connection.
+
+    Keep this simple so existing backend routes can continue using it safely.
+    """
+
     return sqlite3.connect(DB_PATH)
 
 
+def _safe_json_loads(value, fallback):
+    """
+    Safely parse JSON from database text.
+
+    Args:
+        value: JSON string from SQLite.
+        fallback: value to return if parsing fails.
+
+    Returns:
+        Parsed JSON object or fallback.
+    """
+
+    try:
+        if value is None:
+            return fallback
+
+        return json.loads(value)
+
+    except Exception:
+        return fallback
+
+
+def _get_existing_columns(cursor, table_name: str):
+    """
+    Return existing column names for a SQLite table.
+
+    Used for safe migration.
+    """
+
+    rows = cursor.execute(f"PRAGMA table_info({table_name})").fetchall()
+
+    return {row[1] for row in rows}
+
+
+def _add_missing_columns(cursor, table_name: str, columns: dict):
+    """
+    Add missing columns to an existing SQLite table.
+
+    This is safer than recreating the table.
+
+    Args:
+        cursor: SQLite cursor.
+        table_name: target table name.
+        columns: dict like {"column_name": "SQL_TYPE"}
+    """
+
+    existing_columns = _get_existing_columns(cursor, table_name)
+
+    for column_name, column_type in columns.items():
+        if column_name not in existing_columns:
+            cursor.execute(
+                f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type}"
+            )
+
+
+# ---------------------------------------------------------------------
+# Database initialization
+# ---------------------------------------------------------------------
+
+
 def init_db():
+    """
+    Initialize SQLite database and run safe migrations.
+
+    Existing behavior preserved:
+    - events table remains the main event table.
+    - old camera metadata fields remain supported.
+
+    New additions:
+    - location_lat
+    - location_lng
+    - location_label
+    - source
+    - dispatches table
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
-    # 🟢 CHANGED: Correct table schema with camera metadata columns
-    # REASON: Events now need camera_id, camera_name, camera_location, and event timestamp
-
+    # -----------------------------------------------------------------
+    # Main events table
+    # -----------------------------------------------------------------
+    # This preserves the original schema and keeps old data compatible.
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -43,34 +161,157 @@ def init_db():
         )
         """)
 
-    # 🟢 CHANGED: Safe migration for existing SQLite databases
-    # REASON: Old database may not already have camera metadata columns
+    # -----------------------------------------------------------------
+    # Safe event table migration
+    # -----------------------------------------------------------------
+    # These fields are added only if they do not already exist.
+    _add_missing_columns(
+        cursor,
+        "events",
+        {
+            # Existing metadata columns, kept here for older DB compatibility.
+            "camera_id": "TEXT",
+            "camera_name": "TEXT",
+            "camera_location": "TEXT",
+            "event_timestamp": "TEXT",
+            # Demo Feature Completion V1 columns.
+            "location_lat": "REAL",
+            "location_lng": "REAL",
+            "location_label": "TEXT",
+            "source": "TEXT",
+        },
+    )
 
-    existing_columns = [
-        row[1] for row in cursor.execute("PRAGMA table_info(events)").fetchall()
-    ]
-
-    new_columns = {
-        "camera_id": "TEXT",
-        "camera_name": "TEXT",
-        "camera_location": "TEXT",
-        "event_timestamp": "TEXT",
-    }
-
-    for column_name, column_type in new_columns.items():
-        if column_name not in existing_columns:
-            cursor.execute(f"ALTER TABLE events ADD COLUMN {column_name} {column_type}")
+    # -----------------------------------------------------------------
+    # Authority dispatch table
+    # -----------------------------------------------------------------
+    # New table for demo authority response panel.
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS dispatches (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            dispatch_id TEXT NOT NULL,
+            event_id INTEGER,
+            event_type TEXT,
+            unit_type TEXT,
+            unit_name TEXT,
+            status TEXT,
+            eta_minutes INTEGER,
+            location_label TEXT,
+            created_at TEXT NOT NULL
+        )
+        """)
 
     connection.commit()
     connection.close()
 
 
+# ---------------------------------------------------------------------
+# Event storage
+# ---------------------------------------------------------------------
+
+
 def save_event(event: dict):
+    """
+    Save one event to SQLite.
+
+    This function remains compatible with existing event objects.
+
+    Existing fields supported:
+    - type
+    - severity
+    - message
+    - object_id
+    - zone
+    - class
+    - confidence
+    - bbox
+    - camera_id
+    - camera_name
+    - camera_location
+    - timestamp
+    - snapshot_url / snapshot_file
+    - clip_url / clip_file
+
+    New fields supported:
+    - object_label
+    - object_confidence
+    - location_lat
+    - location_lng
+    - location_label
+    - location
+    - source
+
+    Args:
+        event: event dictionary
+
+    Returns:
+        int: inserted database row id
+    """
+
+    if event is None:
+        event = {}
+
     connection = get_connection()
     cursor = connection.cursor()
 
-    # 🟢 CHANGED: Save camera metadata with event
-    # REASON: Reports and dashboard need source camera information
+    demo_location = get_demo_location()
+
+    # -----------------------------------------------------------------
+    # Location enrichment
+    # -----------------------------------------------------------------
+    # If the event already has location, keep it.
+    # If missing, attach demo laptop location.
+    location_lat = event.get("location_lat")
+    location_lng = event.get("location_lng")
+    location_label = event.get("location_label")
+
+    if location_lat is None:
+        location_lat = demo_location["lat"]
+
+    if location_lng is None:
+        location_lng = demo_location["lng"]
+
+    if not location_label:
+        location_label = demo_location["label"]
+
+    event.setdefault("location_lat", location_lat)
+    event.setdefault("location_lng", location_lng)
+    event.setdefault("location_label", location_label)
+
+    event.setdefault(
+        "location",
+        {
+            "lat": location_lat,
+            "lng": location_lng,
+            "label": location_label,
+        },
+    )
+
+    # -----------------------------------------------------------------
+    # Object/class compatibility
+    # -----------------------------------------------------------------
+    # Old dashboard already understands `class`.
+    # New UI can use `object_label`.
+    class_name = (
+        event.get("class") or event.get("class_name") or event.get("object_label")
+    )
+
+    confidence = (
+        event.get("confidence")
+        if event.get("confidence") is not None
+        else event.get("object_confidence")
+    )
+
+    if class_name:
+        event.setdefault("class", class_name)
+        event.setdefault("class_name", class_name)
+        event.setdefault("object_label", class_name)
+
+    if confidence is not None:
+        event.setdefault("confidence", confidence)
+        event.setdefault("object_confidence", confidence)
+
+    event.setdefault("source", "camera_ai")
 
     cursor.execute(
         """
@@ -88,9 +329,13 @@ def save_event(event: dict):
             camera_location,
             event_timestamp,
             raw_event,
-            created_at
+            created_at,
+            location_lat,
+            location_lng,
+            location_label,
+            source
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             event.get("type", "UNKNOWN"),
@@ -98,8 +343,8 @@ def save_event(event: dict):
             event.get("message", ""),
             event.get("object_id"),
             event.get("zone"),
-            event.get("class"),
-            event.get("confidence"),
+            class_name,
+            confidence,
             json.dumps(event.get("bbox", [])),
             event.get("camera_id"),
             event.get("camera_name"),
@@ -107,21 +352,38 @@ def save_event(event: dict):
             event.get("timestamp"),
             json.dumps(event),
             datetime.now().isoformat(),
+            location_lat,
+            location_lng,
+            location_label,
+            event.get("source", "camera_ai"),
         ),
     )
 
     connection.commit()
+
     event_id = cursor.lastrowid
+
     connection.close()
 
     return event_id
 
 
-# 🟢 CHANGED: Added filterable event query
-# REASON: Dashboard and analytics need filtering by type, severity, and limit
-
-
 def get_events(limit: int = 100, event_type: str = None, severity: str = None):
+    """
+    Return event history for dashboard.
+
+    Existing response shape is preserved.
+    New fields are added safely.
+
+    Args:
+        limit: maximum number of events
+        event_type: optional type filter
+        severity: optional severity filter
+
+    Returns:
+        list[dict]: event dictionaries
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -141,7 +403,11 @@ def get_events(limit: int = 100, event_type: str = None, severity: str = None):
             camera_id,
             camera_name,
             camera_location,
-            event_timestamp
+            event_timestamp,
+            location_lat,
+            location_lng,
+            location_label,
+            source
         FROM events
         WHERE 1 = 1
     """
@@ -162,34 +428,76 @@ def get_events(limit: int = 100, event_type: str = None, severity: str = None):
     cursor.execute(query, params)
 
     rows = cursor.fetchall()
+
     connection.close()
 
     events = []
 
     for row in rows:
-        try:
-            raw_event = json.loads(row[9])
-        except Exception:
-            raw_event = {}
+        raw_event = _safe_json_loads(row[9], {})
 
+        # Core event fields
         raw_event["db_id"] = row[0]
         raw_event["type"] = raw_event.get("type", row[1])
         raw_event["severity"] = raw_event.get("severity", row[2])
         raw_event["message"] = raw_event.get("message", row[3])
         raw_event["object_id"] = raw_event.get("object_id", row[4])
         raw_event["zone"] = raw_event.get("zone", row[5])
-        raw_event["class"] = raw_event.get("class", row[6])
-        raw_event["confidence"] = raw_event.get("confidence", row[7])
-        raw_event["bbox"] = raw_event.get("bbox", json.loads(row[8]) if row[8] else [])
+
+        # Class/object fields
+        raw_event["class"] = (
+            raw_event.get("class")
+            or raw_event.get("class_name")
+            or raw_event.get("object_label")
+            or row[6]
+        )
+
+        raw_event["class_name"] = raw_event.get("class_name") or raw_event.get("class")
+
+        raw_event["confidence"] = (
+            raw_event.get("confidence")
+            if raw_event.get("confidence") is not None
+            else row[7]
+        )
+
+        raw_event["object_label"] = (
+            raw_event.get("object_label")
+            or raw_event.get("class")
+            or raw_event.get("class_name")
+        )
+
+        raw_event["object_confidence"] = (
+            raw_event.get("object_confidence")
+            if raw_event.get("object_confidence") is not None
+            else raw_event.get("confidence")
+        )
+
+        # BBox and timestamps
+        raw_event["bbox"] = raw_event.get(
+            "bbox",
+            _safe_json_loads(row[8], []),
+        )
+
         raw_event["created_at"] = row[10]
 
-        # 🟢 CHANGED: Return camera metadata to frontend
-        # REASON: Dashboard alert cards and reports need event source info
-
+        # Camera metadata
         raw_event["camera_id"] = raw_event.get("camera_id") or row[11]
         raw_event["camera_name"] = raw_event.get("camera_name") or row[12]
         raw_event["camera_location"] = raw_event.get("camera_location") or row[13]
         raw_event["timestamp"] = raw_event.get("timestamp") or row[14] or row[10]
+
+        # Location metadata
+        raw_event["location_lat"] = raw_event.get("location_lat") or row[15]
+        raw_event["location_lng"] = raw_event.get("location_lng") or row[16]
+        raw_event["location_label"] = raw_event.get("location_label") or row[17]
+        raw_event["source"] = raw_event.get("source") or row[18] or "camera_ai"
+
+        if not raw_event.get("location"):
+            raw_event["location"] = {
+                "lat": raw_event["location_lat"],
+                "lng": raw_event["location_lng"],
+                "label": raw_event["location_label"],
+            }
 
         events.append(raw_event)
 
@@ -197,6 +505,14 @@ def get_events(limit: int = 100, event_type: str = None, severity: str = None):
 
 
 def clear_events():
+    """
+    Clear event history.
+
+    Existing behavior preserved:
+    - Only clears events.
+    - Does not clear dispatches.
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -206,11 +522,16 @@ def clear_events():
     connection.close()
 
 
-# 🟢 CHANGED: Added analytics summary query
-# REASON: Backend should provide dashboard-ready event analytics
+# ---------------------------------------------------------------------
+# Analytics
+# ---------------------------------------------------------------------
 
 
 def get_analytics_summary():
+    """
+    Return dashboard-ready analytics summary.
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -244,6 +565,9 @@ def get_analytics_summary():
     cursor.execute("SELECT COUNT(*) FROM events WHERE type = 'PPE_VIOLATION'")
     ppe_count = cursor.fetchone()[0]
 
+    cursor.execute("SELECT COUNT(*) FROM events WHERE type = 'SOS_ALERT'")
+    sos_count = cursor.fetchone()[0]
+
     connection.close()
 
     high_priority = critical_count + high_count
@@ -267,17 +591,18 @@ def get_analytics_summary():
             "crowd": crowd_count,
             "weapon": weapon_count,
             "ppe": ppe_count,
+            "sos": sos_count,
         },
         "high_priority_count": high_priority,
         "high_priority_percent": high_priority_percent,
     }
 
 
-# 🟢 CHANGED: Added event type analytics
-# REASON: Dashboard/reporting needs event distribution
-
-
 def get_events_by_type():
+    """
+    Return event count grouped by type.
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -289,6 +614,7 @@ def get_events_by_type():
         """)
 
     rows = cursor.fetchall()
+
     connection.close()
 
     return [
@@ -300,11 +626,11 @@ def get_events_by_type():
     ]
 
 
-# 🟢 CHANGED: Added severity analytics
-# REASON: Dashboard needs severity distribution
-
-
 def get_events_by_severity():
+    """
+    Return event count grouped by severity.
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -316,6 +642,7 @@ def get_events_by_severity():
         """)
 
     rows = cursor.fetchall()
+
     connection.close()
 
     return [
@@ -327,23 +654,28 @@ def get_events_by_severity():
     ]
 
 
-# 🟢 CHANGED: Added risk zone analytics
-# REASON: Identify most active/high-risk restricted zones
-
-
 def get_risk_zones():
+    """
+    Return most active zones.
+
+    If the rule zone is missing, fall back to location_label.
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
     cursor.execute("""
-        SELECT zone, COUNT(*) as count
+        SELECT
+            COALESCE(zone, location_label, 'Unknown Zone') as zone_name,
+            COUNT(*) as count
         FROM events
-        WHERE zone IS NOT NULL
-        GROUP BY zone
+        WHERE zone IS NOT NULL OR location_label IS NOT NULL
+        GROUP BY zone_name
         ORDER BY count DESC
         """)
 
     rows = cursor.fetchall()
+
     connection.close()
 
     return [
@@ -355,8 +687,9 @@ def get_risk_zones():
     ]
 
 
-# 🟢 CHANGED: Added export-ready event query
-# REASON: Reports need structured event rows for JSON/CSV export
+# ---------------------------------------------------------------------
+# Report/export helpers
+# ---------------------------------------------------------------------
 
 
 def get_events_for_export(
@@ -364,6 +697,13 @@ def get_events_for_export(
     severity: str = None,
     limit: int = 1000,
 ):
+    """
+    Return export-ready event rows.
+
+    Existing report fields are preserved.
+    New fields are included safely.
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -383,7 +723,11 @@ def get_events_for_export(
             camera_id,
             camera_name,
             camera_location,
-            event_timestamp
+            event_timestamp,
+            location_lat,
+            location_lng,
+            location_label,
+            source
         FROM events
         WHERE 1 = 1
     """
@@ -404,15 +748,13 @@ def get_events_for_export(
     cursor.execute(query, params)
 
     rows = cursor.fetchall()
+
     connection.close()
 
     export_rows = []
 
     for row in rows:
-        try:
-            raw_event = json.loads(row[9])
-        except Exception:
-            raw_event = {}
+        raw_event = _safe_json_loads(row[9], {})
 
         export_rows.append(
             {
@@ -424,12 +766,24 @@ def get_events_for_export(
                 "zone": row[5],
                 "class_name": row[6],
                 "confidence": row[7],
+                "object_label": (
+                    raw_event.get("object_label") or raw_event.get("class") or row[6]
+                ),
+                "object_confidence": (
+                    raw_event.get("object_confidence")
+                    or raw_event.get("confidence")
+                    or row[7]
+                ),
                 "bbox": row[8],
-                "created_at": row[10],
                 "camera_id": row[11],
                 "camera_name": row[12],
                 "camera_location": row[13],
                 "event_timestamp": row[14],
+                "location_lat": row[15],
+                "location_lng": row[16],
+                "location_label": row[17],
+                "source": row[18],
+                "created_at": row[10],
                 "snapshot_url": raw_event.get("snapshot_url", ""),
                 "snapshot_file": raw_event.get("snapshot_file", ""),
                 "clip_url": raw_event.get("clip_url", ""),
@@ -440,11 +794,17 @@ def get_events_for_export(
     return export_rows
 
 
-# 🟢 CHANGED: Added daily summary analytics
-# REASON: Generate date-based incident reports for dashboard/export
-
-
 def get_daily_summary(date: str = None):
+    """
+    Return daily incident summary.
+
+    Args:
+        date: optional YYYY-MM-DD string
+
+    Returns:
+        dict summary for reports/dashboard
+    """
+
     connection = get_connection()
     cursor = connection.cursor()
 
@@ -462,9 +822,10 @@ def get_daily_summary(date: str = None):
         """,
         (date_filter,),
     )
+
     total_events = cursor.fetchone()[0]
 
-    # By event type
+    # Event type distribution
     cursor.execute(
         """
         SELECT type, COUNT(*)
@@ -484,7 +845,7 @@ def get_daily_summary(date: str = None):
         for row in cursor.fetchall()
     ]
 
-    # By severity
+    # Severity distribution
     cursor.execute(
         """
         SELECT severity, COUNT(*)
@@ -504,14 +865,16 @@ def get_daily_summary(date: str = None):
         for row in cursor.fetchall()
     ]
 
-    # Risk zones
+    # Risk zone distribution
     cursor.execute(
         """
-        SELECT zone, COUNT(*)
+        SELECT
+            COALESCE(zone, location_label, 'Unknown Zone') as zone_name,
+            COUNT(*)
         FROM events
         WHERE created_at LIKE ?
-        AND zone IS NOT NULL
-        GROUP BY zone
+        AND (zone IS NOT NULL OR location_label IS NOT NULL)
+        GROUP BY zone_name
         ORDER BY COUNT(*) DESC
         """,
         (date_filter,),
@@ -525,7 +888,7 @@ def get_daily_summary(date: str = None):
         for row in cursor.fetchall()
     ]
 
-    # Latest incidents
+    # Latest events
     cursor.execute(
         """
         SELECT
@@ -534,7 +897,11 @@ def get_daily_summary(date: str = None):
             camera_id,
             camera_name,
             camera_location,
-            event_timestamp
+            event_timestamp,
+            location_lat,
+            location_lng,
+            location_label,
+            source
         FROM events
         WHERE created_at LIKE ?
         ORDER BY id DESC
@@ -546,16 +913,30 @@ def get_daily_summary(date: str = None):
     latest_events = []
 
     for row in cursor.fetchall():
-        try:
-            event = json.loads(row[0])
-            event["created_at"] = row[1]
-            event["camera_id"] = event.get("camera_id") or row[2]
-            event["camera_name"] = event.get("camera_name") or row[3]
-            event["camera_location"] = event.get("camera_location") or row[4]
-            event["timestamp"] = event.get("timestamp") or row[5] or row[1]
-            latest_events.append(event)
-        except Exception:
+        event = _safe_json_loads(row[0], {})
+
+        if not event:
             continue
+
+        event["created_at"] = row[1]
+        event["camera_id"] = event.get("camera_id") or row[2]
+        event["camera_name"] = event.get("camera_name") or row[3]
+        event["camera_location"] = event.get("camera_location") or row[4]
+        event["timestamp"] = event.get("timestamp") or row[5] or row[1]
+
+        event["location_lat"] = event.get("location_lat") or row[6]
+        event["location_lng"] = event.get("location_lng") or row[7]
+        event["location_label"] = event.get("location_label") or row[8]
+        event["source"] = event.get("source") or row[9] or "camera_ai"
+
+        if not event.get("location"):
+            event["location"] = {
+                "lat": event["location_lat"],
+                "lng": event["location_lng"],
+                "label": event["location_label"],
+            }
+
+        latest_events.append(event)
 
     connection.close()
 
@@ -580,3 +961,236 @@ def get_daily_summary(date: str = None):
         "risk_zones": risk_zones,
         "latest_events": latest_events,
     }
+
+
+# ---------------------------------------------------------------------
+# Heatmap support
+# ---------------------------------------------------------------------
+
+
+def get_heatmap_data():
+    """
+    Return heatmap-ready data for dashboard.
+
+    Designed for Leaflet/react-leaflet frontend.
+
+    The location is based on the configured demo laptop location unless events
+    already contain explicit location fields.
+
+    Returns:
+        dict:
+        {
+            "location": {...},
+            "event_count": int,
+            "latest_event_type": str,
+            "risk_level": str,
+            "risk_score": int,
+            "heat_points": [...]
+        }
+    """
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    demo_location = get_demo_location()
+
+    cursor.execute("SELECT COUNT(*) FROM events")
+    total_events = cursor.fetchone()[0]
+
+    cursor.execute("""
+        SELECT type
+        FROM events
+        ORDER BY id DESC
+        LIMIT 1
+        """)
+
+    latest_row = cursor.fetchone()
+    latest_event_type = latest_row[0] if latest_row else "NONE"
+
+    if total_events >= 15:
+        risk_level = "CRITICAL"
+        risk_score = 95
+    elif total_events >= 8:
+        risk_level = "HIGH"
+        risk_score = 75
+    elif total_events >= 3:
+        risk_level = "MEDIUM"
+        risk_score = 45
+    elif total_events >= 1:
+        risk_level = "LOW"
+        risk_score = 20
+    else:
+        risk_level = "NORMAL"
+        risk_score = 5
+
+    cursor.execute(
+        """
+        SELECT
+            COALESCE(location_lat, ?),
+            COALESCE(location_lng, ?),
+            COALESCE(location_label, ?),
+            COUNT(*) as event_count,
+            MAX(type) as latest_type
+        FROM events
+        GROUP BY
+            COALESCE(location_lat, ?),
+            COALESCE(location_lng, ?),
+            COALESCE(location_label, ?)
+        ORDER BY event_count DESC
+        """,
+        (
+            demo_location["lat"],
+            demo_location["lng"],
+            demo_location["label"],
+            demo_location["lat"],
+            demo_location["lng"],
+            demo_location["label"],
+        ),
+    )
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    heat_points = []
+
+    if rows:
+        for row in rows:
+            heat_points.append(
+                {
+                    "lat": row[0],
+                    "lng": row[1],
+                    "label": row[2],
+                    "weight": row[3],
+                    "event_count": row[3],
+                    "latest_event_type": row[4],
+                }
+            )
+    else:
+        heat_points.append(
+            {
+                "lat": demo_location["lat"],
+                "lng": demo_location["lng"],
+                "label": demo_location["label"],
+                "weight": 0,
+                "event_count": 0,
+                "latest_event_type": "NONE",
+            }
+        )
+
+    return {
+        "location": demo_location,
+        "event_count": total_events,
+        "latest_event_type": latest_event_type,
+        "risk_level": risk_level,
+        "risk_score": risk_score,
+        "heat_points": heat_points,
+    }
+
+
+# ---------------------------------------------------------------------
+# Dispatch support
+# ---------------------------------------------------------------------
+
+
+def save_dispatch(dispatch: dict):
+    """
+    Save one authority dispatch record.
+
+    Args:
+        dispatch: dispatch dictionary
+
+    Returns:
+        int: inserted dispatch database row id
+    """
+
+    if dispatch is None:
+        dispatch = {}
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        INSERT INTO dispatches (
+            dispatch_id,
+            event_id,
+            event_type,
+            unit_type,
+            unit_name,
+            status,
+            eta_minutes,
+            location_label,
+            created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            dispatch.get("dispatch_id"),
+            dispatch.get("event_id"),
+            dispatch.get("event_type"),
+            dispatch.get("unit_type"),
+            dispatch.get("unit_name"),
+            dispatch.get("status", "DISPATCHED"),
+            dispatch.get("eta_minutes", 3),
+            dispatch.get("location_label"),
+            dispatch.get("created_at") or datetime.now().isoformat(),
+        ),
+    )
+
+    connection.commit()
+
+    dispatch_db_id = cursor.lastrowid
+
+    connection.close()
+
+    return dispatch_db_id
+
+
+def get_dispatches(limit: int = 50):
+    """
+    Return latest authority dispatch records.
+    """
+
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT
+            id,
+            dispatch_id,
+            event_id,
+            event_type,
+            unit_type,
+            unit_name,
+            status,
+            eta_minutes,
+            location_label,
+            created_at
+        FROM dispatches
+        ORDER BY id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+
+    rows = cursor.fetchall()
+
+    connection.close()
+
+    return [
+        {
+            "id": row[0],
+            "dispatch_id": row[1],
+            "event_id": row[2],
+            "event_type": row[3],
+            "unit_type": row[4],
+            "unit_name": row[5],
+            "status": row[6],
+            "eta_minutes": row[7],
+            "location_label": row[8],
+            "created_at": row[9],
+        }
+        for row in rows
+    ]

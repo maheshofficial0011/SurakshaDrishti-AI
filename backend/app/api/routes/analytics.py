@@ -8,6 +8,7 @@ from backend.app.database import (
     get_events_by_type,
     get_events_by_severity,
     get_risk_zones,
+    get_heatmap_data,
 )
 
 router = APIRouter()
@@ -31,3 +32,15 @@ async def analytics_by_severity():
 @router.get("/analytics/risk-zones")
 async def analytics_risk_zones():
     return {"items": get_risk_zones()}
+
+
+@router.get("/analytics/heatmap")
+async def analytics_heatmap():
+    """
+    Return heatmap-ready data for the dashboard.
+
+    This endpoint is additive and does not affect existing analytics routes.
+    Used by the Leaflet dashboard panel.
+    """
+
+    return get_heatmap_data()

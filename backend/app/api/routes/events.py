@@ -4,9 +4,87 @@
 from fastapi import APIRouter, Query
 
 from backend.app.websocket_manager import broadcast_event
-from backend.app.database import save_event, get_events, clear_events
+from backend.app.database import (
+    save_event,
+    get_events,
+    clear_events,
+    save_dispatch,
+)
+from backend.app.demo_config import enrich_event_with_demo_location
+from backend.app.services.demo_dispatcher import create_dispatches_for_event
 
 router = APIRouter()
+
+
+def _should_create_dispatch(event: dict):
+    """
+    Decide whether an event should create authority response dispatch.
+
+    This is intentionally conservative:
+    - HIGH and CRITICAL alerts create dispatch.
+    - SOS_ALERT always creates dispatch.
+    - Normal/low/info events do not create dispatch.
+    """
+
+    event_type = (event.get("type") or "").upper()
+    severity = (event.get("severity") or "").upper()
+
+    return event_type == "SOS_ALERT" or severity in ["HIGH", "CRITICAL"]
+
+
+async def _save_broadcast_and_dispatch(event: dict):
+    """
+    Shared safe event flow.
+
+    Existing behavior preserved:
+    - save event to SQLite
+    - attach db_id
+    - broadcast event over WebSocket
+
+    New additive behavior:
+    - enrich event with demo laptop location
+    - create dispatch records for high-priority events
+    - broadcast dispatch update as a normal WebSocket message
+
+    Returns:
+        tuple: (event, dispatches)
+    """
+
+    event = enrich_event_with_demo_location(event)
+
+    event_id = save_event(event)
+    event["db_id"] = event_id
+
+    # Existing WebSocket behavior is preserved:
+    # frontend still receives normal event objects.
+    await broadcast_event(event)
+
+    dispatches = []
+
+    if _should_create_dispatch(event):
+        dispatches = create_dispatches_for_event(event, event_id=event_id)
+
+        for dispatch in dispatches:
+            dispatch_db_id = save_dispatch(dispatch)
+            dispatch["id"] = dispatch_db_id
+
+            # Broadcast dispatch as event-like payload to avoid changing
+            # existing websocket manager format.
+            await broadcast_event(
+                {
+                    "type": "DISPATCH_UPDATE",
+                    "severity": "INFO",
+                    "message": (
+                        f"{dispatch['unit_name']} dispatched to "
+                        f"{dispatch['location_label']} "
+                        f"(ETA {dispatch['eta_minutes']} min)"
+                    ),
+                    "dispatch": dispatch,
+                    "source": "authority_dispatcher",
+                }
+            )
+
+    return event, dispatches
 
 
 @router.get("/events")
@@ -37,16 +115,23 @@ async def list_events(
 
 @router.post("/events")
 async def add_event(event: dict):
-    # 🟢 CHANGED: Save incoming event to SQLite
-    # REASON: Persistent event history
+    """
+    Add one event to the system.
 
-    event_id = save_event(event)
+    Compatible with existing pipeline:
+    - Pipeline still posts event JSON to /events.
+    - Backend still saves and broadcasts it.
+    - Extra dispatch behavior only happens for high-priority events.
+    """
 
-    event["db_id"] = event_id
+    event, dispatches = await _save_broadcast_and_dispatch(event)
 
-    await broadcast_event(event)
-
-    return {"status": "event added", "event_id": event_id}
+    return {
+        "status": "event added",
+        "event_id": event["db_id"],
+        "event": event,
+        "dispatches": dispatches,
+    }
 
 
 @router.delete("/events")
@@ -74,15 +159,17 @@ async def create_test_event():
         "camera_id": "CAM-TEST",
         "camera_name": "Demo Test Camera",
         "camera_location": "Demo Area",
+        "class": "person",
+        "class_name": "person",
+        "object_label": "person",
+        "object_confidence": 0.95,
+        "source": "manual_test",
     }
 
-    event_id = save_event(test_event)
-
-    test_event["db_id"] = event_id
-
-    await broadcast_event(test_event)
+    event, dispatches = await _save_broadcast_and_dispatch(test_event)
 
     return {
         "status": "test event generated",
-        "event": test_event,
+        "event": event,
+        "dispatches": dispatches,
     }

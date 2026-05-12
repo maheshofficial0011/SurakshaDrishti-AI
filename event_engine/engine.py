@@ -18,11 +18,22 @@ class EventEngine:
     - Severity escalation
     - Cooldown / deduplication
     - Stale track cleanup
+    - Object-aware event details for dashboard display
 
     Final MVP exclusions:
     - PPE detection is excluded.
     - Weapon detection is disabled by default because the MVP does not include
       a reliable custom weapon model.
+
+    Safety:
+    - Public API remains the same:
+        process(tracked_objects, detections=None)
+    - Existing event keys remain unchanged.
+    - New object fields are additive only:
+        class
+        class_name
+        object_label
+        object_confidence
     """
 
     def __init__(self):
@@ -146,7 +157,11 @@ class EventEngine:
                 "message": "...",
                 "object_id": 1,
                 "zone": "Main Gate",
-                "bbox": [...]
+                "bbox": [...],
+                "class": "person",
+                "class_name": "person",
+                "object_label": "person",
+                "object_confidence": 0.82
             }
         ]
         """
@@ -191,6 +206,7 @@ class EventEngine:
                     zone_name=zone_name,
                     track_conf=track_conf,
                     current_time=current_time,
+                    detections=detections,
                 )
 
                 if intrusion_event:
@@ -205,6 +221,7 @@ class EventEngine:
                 current_zone=current_zone,
                 track_conf=track_conf,
                 current_time=current_time,
+                detections=detections,
             )
 
             if loitering_event:
@@ -240,6 +257,8 @@ class EventEngine:
         # --------------------------------------------------
         # 5. Dispatch + return
         # --------------------------------------------------
+        # Existing dispatcher behavior is preserved.
+        # Backend/dashboard delivery is still handled by the pipeline.
 
         for event in events:
             self.alert.send(event)
@@ -276,12 +295,21 @@ class EventEngine:
     # Intrusion V3.1
     # --------------------------------------------------
 
-    def check_intrusion(self, obj_id, bbox, zone_name, track_conf, current_time):
+    def check_intrusion(
+        self,
+        obj_id,
+        bbox,
+        zone_name,
+        track_conf,
+        current_time,
+        detections=None,
+    ):
         """
         Intrusion rule:
         - Person center must remain inside a restricted zone.
         - Alert triggers only after intrusion_confirm_seconds.
         - Severity can escalate based on zone and duration.
+        - Event is enriched with object label/confidence from detections.
         """
 
         intrusion_key = f"{obj_id}:{zone_name}"
@@ -310,7 +338,7 @@ class EventEngine:
             track_conf=track_conf,
         )
 
-        return self.make_event(
+        event = self.make_event(
             event_type="INTRUSION",
             severity=severity,
             object_id=obj_id,
@@ -328,6 +356,8 @@ class EventEngine:
             },
         )
 
+        return self.enrich_event_with_detection(event, bbox, detections)
+
     # --------------------------------------------------
     # Loitering V3.1
     # --------------------------------------------------
@@ -340,6 +370,7 @@ class EventEngine:
         current_zone,
         track_conf,
         current_time,
+        detections=None,
     ):
         """
         Loitering rule:
@@ -347,6 +378,7 @@ class EventEngine:
         - Big movement resets the timer.
         - Small bbox jitter is tolerated.
         - Severity can escalate based on duration and zone.
+        - Event is enriched with object label/confidence from detections.
         """
 
         if obj_id not in self.loiter_anchor_position:
@@ -396,7 +428,7 @@ class EventEngine:
             track_conf=track_conf,
         )
 
-        return self.make_event(
+        event = self.make_event(
             event_type="LOITERING",
             severity=severity,
             object_id=obj_id,
@@ -415,6 +447,8 @@ class EventEngine:
             },
         )
 
+        return self.enrich_event_with_detection(event, bbox, detections)
+
     # --------------------------------------------------
     # Crowd V3.1
     # --------------------------------------------------
@@ -432,6 +466,9 @@ class EventEngine:
         - Otherwise it falls back to the full camera view.
         - Count must remain above threshold for crowd_confirm_seconds.
         - Severity escalates for higher count or longer crowd duration.
+
+        Crowd events do not map to one specific bbox, so they are enriched
+        as person/person_group events using person_count and object_ids.
         """
 
         events = []
@@ -504,7 +541,7 @@ class EventEngine:
             duration=crowd_duration,
         )
 
-        return self.make_event(
+        event = self.make_event(
             event_type="CROWD_ALERT",
             severity=severity,
             zone=area_name,
@@ -520,6 +557,14 @@ class EventEngine:
                 "rule": "crowd_duration_v3_1",
             },
         )
+
+        # Crowd event is not one object, but still object-aware for dashboard.
+        event.setdefault("class", "person")
+        event.setdefault("class_name", "person")
+        event.setdefault("object_label", "person_group")
+        event.setdefault("object_confidence", confidence)
+
+        return event
 
     # --------------------------------------------------
     # Weapon hook — disabled by default
@@ -564,19 +609,22 @@ class EventEngine:
             if not self.can_emit(alert_key):
                 continue
 
-            events.append(
-                self.make_event(
-                    event_type="WEAPON_DETECTED",
-                    severity="CRITICAL",
-                    bbox=bbox,
-                    message=f"Potential weapon detected: {cls} ({conf:.2f})",
-                    extra={
-                        "class": cls,
-                        "confidence": round(conf, 3),
-                        "rule": "weapon_confidence_multiframe_hook_v3_1",
-                    },
-                )
+            event = self.make_event(
+                event_type="WEAPON_DETECTED",
+                severity="CRITICAL",
+                bbox=bbox,
+                message=f"Potential weapon detected: {cls} ({conf:.2f})",
+                extra={
+                    "class": cls,
+                    "class_name": cls,
+                    "object_label": cls,
+                    "object_confidence": round(conf, 3),
+                    "confidence": round(conf, 3),
+                    "rule": "weapon_confidence_multiframe_hook_v3_1",
+                },
             )
+
+            events.append(event)
 
         if len(self.weapon_seen_count) > 100:
             self.weapon_seen_count.clear()
@@ -627,6 +675,138 @@ class EventEngine:
         return round(max(0.0, min(1.0, combined)), 3)
 
     # --------------------------------------------------
+    # Object-aware event enrichment helpers
+    # --------------------------------------------------
+
+    def enrich_event_with_detection(self, event, bbox, detections):
+        """
+        Attach detected object label/confidence to a behavior event.
+
+        Why this exists:
+        - TrackingService tracks only persons.
+        - Tracker output contains id, bbox, conf.
+        - Detector output contains class labels, e.g. "person".
+        - Dashboard should show which object caused the event.
+
+        This function is additive and safe:
+        - It does not remove existing keys.
+        - It does not overwrite existing behavior confidence.
+        - It only adds class/object-friendly fields when possible.
+        """
+
+        if event is None:
+            return event
+
+        best_detection = self.find_best_detection_for_bbox(bbox, detections)
+
+        if best_detection:
+            label = (
+                best_detection.get("class")
+                or best_detection.get("class_name")
+                or "person"
+            )
+
+            detection_confidence = best_detection.get("conf")
+
+        else:
+            label = "person"
+            detection_confidence = event.get("track_confidence") or event.get(
+                "confidence"
+            )
+
+        event.setdefault("class", label)
+        event.setdefault("class_name", label)
+        event.setdefault("object_label", label)
+
+        if detection_confidence is not None:
+            try:
+                detection_confidence = round(float(detection_confidence), 3)
+            except Exception:
+                pass
+
+            event.setdefault("object_confidence", detection_confidence)
+
+            # Preserve behavior confidence if already present.
+            # Only set confidence if event has no confidence yet.
+            event.setdefault("confidence", detection_confidence)
+
+        return event
+
+    def find_best_detection_for_bbox(self, bbox, detections):
+        """
+        Find the detection that best overlaps with a tracked bbox.
+
+        Matching strategy:
+        - Normalize bbox.
+        - Compare with every detection bbox.
+        - Choose highest IoU.
+        - Return None if no valid detection exists.
+
+        Args:
+            bbox: tracked bbox [x1, y1, x2, y2]
+            detections: list of detector outputs
+
+        Returns:
+            dict or None
+        """
+
+        bbox = self.normalize_bbox(bbox)
+
+        if not bbox:
+            return None
+
+        best_detection = None
+        best_iou = 0.0
+
+        for det in detections or []:
+            det_bbox = self.normalize_bbox(det.get("bbox"))
+
+            if not det_bbox:
+                continue
+
+            iou = self.compute_iou(bbox, det_bbox)
+
+            if iou > best_iou:
+                best_iou = iou
+                best_detection = det
+
+        return best_detection
+
+    def compute_iou(self, box_a, box_b):
+        """
+        Compute Intersection over Union between two bounding boxes.
+
+        Used only for event enrichment.
+        Tracking has its own tracker implementation and is not changed here.
+        """
+
+        if not box_a or not box_b:
+            return 0.0
+
+        ax1, ay1, ax2, ay2 = box_a
+        bx1, by1, bx2, by2 = box_b
+
+        inter_x1 = max(ax1, bx1)
+        inter_y1 = max(ay1, by1)
+        inter_x2 = min(ax2, bx2)
+        inter_y2 = min(ay2, by2)
+
+        inter_w = max(0, inter_x2 - inter_x1)
+        inter_h = max(0, inter_y2 - inter_y1)
+
+        inter_area = inter_w * inter_h
+
+        area_a = max(0, ax2 - ax1) * max(0, ay2 - ay1)
+        area_b = max(0, bx2 - bx1) * max(0, by2 - by1)
+
+        union = area_a + area_b - inter_area
+
+        if union <= 0:
+            return 0.0
+
+        return inter_area / union
+
+    # --------------------------------------------------
     # Core utility helpers
     # --------------------------------------------------
 
@@ -656,6 +836,9 @@ class EventEngine:
     ):
         """
         Create backend/dashboard-compatible event object.
+
+        Existing event shape is preserved.
+        Extra fields are merged at the end.
         """
 
         event = {
