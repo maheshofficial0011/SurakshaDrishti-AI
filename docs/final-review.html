@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SurakshaDrishti AI — Final Review Note</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --bg: #f3f6fb;
+    --paper: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #cbd5e1;
+    --blue: #0284c7;
+    --cyan: #0891b2;
+    --green: #16a34a;
+    --red: #dc2626;
+    --gold: #d97706;
+    --purple: #7c3aed;
+    --soft-blue: #e0f2fe;
+    --soft-green: #dcfce7;
+    --soft-red: #fee2e2;
+    --soft-gold: #fef3c7;
+    --soft-purple: #ede9fe;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    padding: 28px;
+}
+
+.toolbar {
+    max-width: 1100px;
+    margin: 0 auto 18px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    background: var(--blue);
+    color: white;
+    font-weight: 700;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);
+}
+
+.btn.secondary {
+    background: #334155;
+}
+
+.btn.green {
+    background: var(--green);
+}
+
+.btn.purple {
+    background: var(--purple);
+}
+
+.page {
+    max-width: 1100px;
+    margin: 0 auto;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 14px 40px rgba(15, 23, 42, 0.12);
+}
+
+.cover {
+    background: linear-gradient(135deg, #020617, #0f172a 55%, #083344);
+    color: white;
+    padding: 44px 48px;
+    position: relative;
+    overflow: hidden;
+}
+
+.cover::after {
+    content: "";
+    position: absolute;
+    width: 260px;
+    height: 260px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    top: -70px;
+    right: -60px;
+}
+
+.badge {
+    display: inline-block;
+    padding: 6px 14px;
+    border-radius: 20px;
+    background: rgba(34, 211, 238, 0.16);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    color: #67e8f9;
+    font-size: 12px;
+    letter-spacing: 2px;
+    font-weight: 700;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+}
+
+.cover h1 {
+    font-size: 40px;
+    line-height: 1.15;
+    margin-bottom: 8px;
+}
+
+.cover h1 span {
+    color: #67e8f9;
+}
+
+.cover p {
+    color: rgba(255, 255, 255, 0.78);
+    font-size: 16px;
+    max-width: 820px;
+}
+
+.meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 22px;
+}
+
+.meta-pill {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    padding: 7px 12px;
+    font-size: 13px;
+    color: rgba(255, 255, 255, 0.86);
+}
+
+.content {
+    padding: 38px 48px 48px;
+}
+
+.section {
+    margin-bottom: 38px;
+    break-inside: avoid;
+}
+
+.section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 22px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--ink);
+}
+
+.section-num {
+    background: var(--ink);
+    color: white;
+    border-radius: 6px;
+    padding: 3px 10px;
+    font-size: 13px;
+}
+
+.note-box {
+    border-left: 4px solid var(--blue);
+    background: var(--soft-blue);
+    padding: 14px 18px;
+    border-radius: 0 10px 10px 0;
+    margin: 12px 0;
+}
+
+.note-box.green {
+    border-left-color: var(--green);
+    background: var(--soft-green);
+}
+
+.note-box.gold {
+    border-left-color: var(--gold);
+    background: var(--soft-gold);
+}
+
+.repo-link {
+    font-weight: 700;
+    color: var(--blue);
+    word-break: break-word;
+}
+
+.status-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.status-card {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px;
+    background: #f8fafc;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.status-card::before {
+    content: "✓ ";
+    color: var(--green);
+    font-weight: 900;
+}
+
+.diagram {
+    background: #f8fafc;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    overflow-x: auto;
+}
+
+.flow-vertical {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 320px;
+}
+
+.node {
+    width: 285px;
+    text-align: center;
+    padding: 13px 16px;
+    border-radius: 12px;
+    border: 2px solid var(--blue);
+    background: white;
+    font-weight: 800;
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.06);
+}
+
+.node small {
+    display: block;
+    color: var(--muted);
+    font-weight: 600;
+    margin-top: 3px;
+}
+
+.arrow-down {
+    font-size: 26px;
+    color: var(--blue);
+    line-height: 1.2;
+    padding: 3px 0;
+}
+
+.flow-horizontal {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.step-node {
+    min-width: 155px;
+    padding: 14px;
+    border-radius: 12px;
+    background: white;
+    border: 2px solid var(--purple);
+    text-align: center;
+    font-weight: 800;
+}
+
+.arrow-right {
+    color: var(--purple);
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.dashboard-box {
+    border: 2px solid var(--cyan);
+    border-radius: 14px;
+    padding: 18px;
+    background: white;
+}
+
+.dashboard-title {
+    text-align: center;
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--cyan);
+    margin-bottom: 14px;
+}
+
+.module-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.module {
+    border: 1px solid var(--line);
+    background: #f8fafc;
+    border-radius: 10px;
+    padding: 12px;
+    text-align: center;
+    font-weight: 800;
+    font-size: 14px;
+}
+
+.architecture {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+    align-items: center;
+}
+
+.arch-card {
+    border-radius: 14px;
+    border: 2px solid var(--blue);
+    padding: 16px;
+    text-align: center;
+    background: white;
+    font-weight: 900;
+}
+
+.arch-card small {
+    display: block;
+    color: var(--muted);
+    margin-top: 4px;
+}
+
+.picture-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 18px;
+}
+
+.picture-card {
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    background: #f8fafc;
+}
+
+.picture-card img {
+    width: 100%;
+    display: block;
+    border-bottom: 1px solid var(--line);
+}
+
+.caption {
+    padding: 10px 12px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    font-weight: 700;
+}
+
+ul {
+    padding-left: 22px;
+    margin-top: 8px;
+}
+
+li {
+    margin-bottom: 6px;
+}
+
+.team-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.team-member {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: #f8fafc;
+    font-weight: 700;
+}
+
+.signature-area {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 34px;
+    margin-top: 22px;
+}
+
+.signature-line {
+    padding-top: 44px;
+    border-bottom: 2px solid var(--ink);
+    text-align: center;
+    color: var(--muted);
+    font-weight: 700;
+}
+
+.footer {
+    margin-top: 34px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+@media (max-width: 760px) {
+    body {
+        padding: 10px;
+    }
+
+    .cover,
+    .content {
+        padding: 28px 20px;
+    }
+
+    .status-grid,
+    .module-grid,
+    .picture-grid,
+    .team-list,
+    .signature-area,
+    .architecture {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media print {
+    body {
+        background: white;
+        padding: 0;
+    }
+
+    .toolbar {
+        display: none;
+    }
+
+    .page {
+        max-width: none;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+    }
+
+    .section {
+        page-break-inside: avoid;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="toolbar">
+    <button class="btn secondary" onclick="scrollToTop()">Back to Top</button>
+    <button class="btn" onclick="window.print()">Print / Save as PDF</button>
+
+    <!-- Optional ready-made files if you create/export them later -->
+    <a class="btn green" href="SurakshaDrishti_Final_Review_Note.pdf" download>
+        Download PDF
+    </a>
+    <a class="btn purple" href="SurakshaDrishti_Final_Review_Note.pptx" download>
+        Download PowerPoint
+    </a>
+</div>
+
+<main class="page" id="top">
+
+<header class="cover">
+    <div class="badge">Final Project Review Note</div>
+    <h1>SurakshaDrishti <span>AI</span></h1>
+    <p>
+        AI-powered real-time public safety surveillance command-center prototype
+        with live detection, person tracking, SOS emergency alerts, authority response workflow,
+        heatmap analytics, and AI assistant support.
+    </p>
+
+    <div class="meta-row">
+        <div class="meta-pill"><strong>Team:</strong> TriNetra</div>
+        <div class="meta-pill"><strong>Status:</strong> Final MVP Completed</div>
+        <div class="meta-pill"><strong>Platform:</strong> Local Windows Prototype</div>
+        <div class="meta-pill"><strong>Repository:</strong> GitHub Uploaded</div>
+    </div>
+</header>
+
+<section class="content">
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">01</span> Final Review Note</h2>
+
+    <p>
+        We, Team TriNetra, have completed the final MVP of our project
+        <strong>SurakshaDrishti AI</strong>.
+    </p>
+
+    <p>
+        SurakshaDrishti AI is a local real-time AI surveillance command-center prototype
+        designed to support public safety monitoring. It uses live webcam input, AI object detection,
+        person tracking, SOS emergency alert generation, pinned emergency alerts, authority response workflow,
+        heatmap analytics, and a local AI assistant.
+    </p>
+
+    <div class="note-box green">
+        The system has been successfully tested. Backend, frontend dashboard, live feed, detection,
+        tracking, SOS, authority workflow, heatmap, and assistant are working properly.
+    </div>
+
+    <p>
+        <strong>GitHub Repository:</strong><br />
+        <span class="repo-link">https://github.com/maheshofficial0011/SurakshaDrishti-AI</span>
+    </p>
+
+    <p>
+        <strong>Status:</strong> Final MVP completed, tested, documented, uploaded to GitHub,
+        and ready for final demo/submission.
+    </p>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">02</span> System Working Flow Diagram</h2>
+
+    <div class="diagram">
+        <div class="flow-vertical">
+            <div class="node">Live Camera <small>Webcam Input</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">AI Detection <small>YOLOv8 + OpenCV</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Person Tracking <small>Stable Person ID</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Event Engine <small>Rule-Based Logic</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Backend API <small>FastAPI + SQLite</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">React Dashboard <small>Live Monitoring</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Alerts / SOS / Authority Action <small>Emergency Response</small></div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">03</span> AI Pipeline Diagram</h2>
+
+    <div class="diagram">
+        <div class="flow-vertical">
+            <div class="node">Camera Frame</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Preprocessing</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">YOLOv8 Object Detection</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Person Detection Filtering</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Stable Person Tracking</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Event Engine</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Alert / Snapshot / Dashboard Update</div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">04</span> SOS Emergency Workflow Diagram</h2>
+
+    <div class="diagram">
+        <div class="flow-vertical">
+            <div class="node">User / Operator <small>Opens SOS Control</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Fill SOS Form <small>Location, Type, Help Needed</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Trigger SOS Button</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Backend Creates <small>CRITICAL SOS Alert</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Alert Pinned at Top <small>Emergency Banner Appears</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Authority Dispatch <small>Pending Response</small></div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Assign Unit</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Mark Running</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Resolve Incident</div>
+            <div class="arrow-down">↓</div>
+            <div class="node">Emergency Closed</div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">05</span> Authority Response Workflow</h2>
+
+    <div class="diagram">
+        <div class="flow-horizontal">
+            <div class="step-node">PENDING</div>
+            <div class="arrow-right">→</div>
+            <div class="step-node">ASSIGNED</div>
+            <div class="arrow-right">→</div>
+            <div class="step-node">RUNNING / DISPATCHED</div>
+            <div class="arrow-right">→</div>
+            <div class="step-node">RESOLVED</div>
+        </div>
+    </div>
+
+    <ul>
+        <li><strong>PENDING:</strong> Incident created, no unit assigned yet.</li>
+        <li><strong>ASSIGNED:</strong> Unit selected for response.</li>
+        <li><strong>RUNNING:</strong> Unit is responding.</li>
+        <li><strong>RESOLVED:</strong> Incident completed.</li>
+    </ul>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">06</span> Dashboard Module Diagram</h2>
+
+    <div class="diagram">
+        <div class="dashboard-box">
+            <div class="dashboard-title">SurakshaDrishti AI Dashboard</div>
+            <div class="module-grid">
+                <div class="module">Overview</div>
+                <div class="module">Live Feed</div>
+                <div class="module">Alerts</div>
+                <div class="module">Heatmap</div>
+                <div class="module">SOS Control</div>
+                <div class="module">Authority</div>
+                <div class="module">Analytics</div>
+                <div class="module">AI Assistant</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">07</span> Simple Architecture Diagram</h2>
+
+    <div class="diagram">
+        <div class="architecture">
+            <div class="arch-card">Camera Input <small>Webcam</small></div>
+            <div class="arch-card">AI Pipeline <small>YOLO + Tracking</small></div>
+            <div class="arch-card">React Dashboard <small>Operator UI</small></div>
+            <div class="arch-card">FastAPI Backend <small>SQLite + APIs</small></div>
+            <div class="arch-card">SOS / Alerts <small>Emergency Banner</small></div>
+            <div class="arch-card">Dispatch Records <small>Authority Flow</small></div>
+        </div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">08</span> Project Screenshots</h2>
+
+    <div class="picture-grid">
+
+        <div class="picture-card">
+            <img src="images/01_login_screen - Copy.png" alt="Login Screen">
+            <div class="caption">Figure 1: Login screen of SurakshaDrishti AI dashboard.</div>
+        </div>
+
+        <div class="picture-card">
+            <img src="images/02_dashboard_home - Copy.png" alt="Dashboard Home">
+            <div class="caption">Figure 2: Main command dashboard overview.</div>
+        </div>
+
+        <div class="picture-card">
+            <img src="images/03_live_feed_alerts.png" alt="Live Feed Alerts">
+            <div class="caption">Figure 3: Live feed with person tracking and alert feed.</div>
+        </div>
+
+        <div class="picture-card">
+            <img src="images/04_test_alert.png" alt="Test Alert">
+            <div class="caption">Figure 4: Test alert shown on the command dashboard.</div>
+        </div>
+
+        <div class="picture-card">
+            <img src="images/05_snapshot_alert.png" alt="Snapshot Alert">
+            <div class="caption">Figure 5: Alert evidence snapshot from live AI camera feed.</div>
+        </div>
+
+        <div class="picture-card">
+            <img src="images/06_analytics_report.png" alt="Analytics Report">
+            <div class="caption">Figure 6: Analytics and reporting panels.</div>
+        </div>
+
+        <div class="picture-card">
+            <img src="images/07_settings_panel.png" alt="Settings Panel">
+            <div class="caption">Figure 7: Settings panel showing system mode and runtime status.</div>
+        </div>
+
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">09</span> Final Tested Modules</h2>
+
+    <div class="status-grid">
+        <div class="status-card">Backend API</div>
+        <div class="status-card">Frontend Dashboard</div>
+        <div class="status-card">Live Camera Feed</div>
+        <div class="status-card">Object Detection</div>
+        <div class="status-card">Person Tracking</div>
+        <div class="status-card">SOS Alert Generation</div>
+        <div class="status-card">SOS Alert Pinning</div>
+        <div class="status-card">Authority Workflow</div>
+        <div class="status-card">Heatmap Analytics</div>
+        <div class="status-card">AI Assistant</div>
+        <div class="status-card">Documentation</div>
+        <div class="status-card">GitHub Upload</div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">10</span> Technologies Used</h2>
+
+    <div class="note-box">
+        <strong>Backend:</strong> Python, FastAPI, SQLite<br />
+        <strong>Frontend:</strong> React, Vite, JavaScript<br />
+        <strong>AI / Computer Vision:</strong> YOLOv8, OpenCV, custom person tracking<br />
+        <strong>Other:</strong> PowerShell run scripts, GitHub, local Windows system
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">11</span> Final Conclusion</h2>
+
+    <div class="note-box gold">
+        SurakshaDrishti AI successfully demonstrates how AI, computer vision,
+        emergency alerting, and authority response workflow can be integrated into one
+        real-time public safety command-center prototype.
+        <br /><br />
+        The project is currently a final MVP and is ready for demonstration, review,
+        and further development.
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">12</span> Team Members</h2>
+
+    <p><strong>Team Name:</strong> TriNetra</p>
+
+    <div class="team-list">
+        <div class="team-member">1. Mahesh Rana — Team Leader</div>
+        <div class="team-member">2. Laxman Chaudhary</div>
+        <div class="team-member">3. Pardip Singh</div>
+        <div class="team-member">4. Gagan Bahadur Guru Dhami</div>
+        <div class="team-member">5. Sandip Sah</div>
+        <div class="team-member">6. Ashutosh Mishra</div>
+        <div class="team-member">7. Osma</div>
+    </div>
+</section>
+
+<section class="section">
+    <h2 class="section-title"><span class="section-num">13</span> Signature Section</h2>
+
+    <p><strong>Submitted by:</strong> Team TriNetra</p>
+    <p><strong>Project Name:</strong> SurakshaDrishti AI</p>
+    <p><strong>Project Status:</strong> Final MVP Completed</p>
+
+    <div class="signature-area">
+        <div>
+            <div class="signature-line">Reviewer Signature</div>
+        </div>
+        <div>
+            <div class="signature-line">Date</div>
+        </div>
+    </div>
+</section>
+
+<footer class="footer">
+    <span>SurakshaDrishti AI · Team TriNetra</span>
+    <span>Final MVP Review Note</span>
+</footer>
+
+</section>
+</main>
+
+<script>
+function scrollToTop() {
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
+}
+
+document.addEventListener("keydown", function (event) {
+    if (event.ctrlKey && event.key.toLowerCase() === "p") {
+        event.preventDefault();
+        window.print();
+    }
+});
+</script>
+
+</body>
+</html>
