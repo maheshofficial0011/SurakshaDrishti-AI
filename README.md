@@ -1,313 +1,182 @@
 # SurakshaDrishti AI
 
-**Team:** TriNetra  
-**Mode:** Final MVP  
-**Platform:** Local Windows Real-Time AI Surveillance Prototype
+<p align="center">
+  <strong>AI/ML-Based Railway Crowd and Crime Monitoring System</strong><br/>
+  <em>Turning Railway CCTV into Real-Time AI Safety Intelligence</em>
+</p>
+
+<p align="center">
+  <img alt="Project" src="https://img.shields.io/badge/Project-SurakshaDrishti%20AI-0ea5e9?style=for-the-badge"/>
+  <img alt="Team" src="https://img.shields.io/badge/Team-TriNetra-2563eb?style=for-the-badge"/>
+  <img alt="Domain" src="https://img.shields.io/badge/Domain-Smart%20Automation-10b981?style=for-the-badge"/>
+</p>
 
 ---
 
-## Project Overview
+## Project Pitch
 
-SurakshaDrishti AI is a local real-time public safety surveillance prototype.
+**SurakshaDrishti AI** transforms normal CCTV/webcam input into an intelligent railway safety workflow. It detects persons, monitors risky activities, generates real-time alerts, stores incident evidence and supports faster authority response through a live command dashboard.
 
-It uses a live webcam, AI object detection, person tracking, alerts, SOS emergency reporting, heatmap analytics, and authority response workflow.
-
-The system is designed as a command-center style dashboard where operators can monitor live video, review alerts, trigger SOS, assign response units, and resolve incidents.
+This project is aligned with **SIH1349 - Ministry of Railways**, focusing on using existing CCTV networks for **crowd management, crime prevention and work monitoring using AI/ML**.
 
 ---
 
-## Main Features
+## Why This Project Matters
 
-- Live webcam feed
-- AI object detection using YOLOv8
-- Person tracking with stable IDs
-- Real-time dashboard
-- Alert feed
-- Pinned SOS emergency alerts
-- SOS emergency form
-- Authority Response Center
-- Dispatch workflow:
-  - Pending
-  - Assigned
-  - Running
-  - Resolved
-- Heatmap section
-- Analytics section
-- Local AI assistant
-- Snapshot evidence support
-- Professional command-center UI
-- CPU-friendly final MVP mode
+Railway stations are crowded, dynamic and high-risk public spaces. Traditional CCTV systems record incidents, but they do not automatically detect unusual behavior, prioritize alerts or guide fast response.
+
+SurakshaDrishti AI demonstrates how existing surveillance infrastructure can be upgraded into a **real-time AI safety command system** without requiring a complete hardware replacement.
 
 ---
 
-## Tech Stack
+## What We Built
 
-### Backend
-
-- Python
-- FastAPI
-- SQLite
-- OpenCV
-- Ultralytics YOLOv8
-- REST APIs
-
-### Frontend
-
-- React
-- Vite
-- JavaScript
-- CSS styling inside App.jsx
-
-### AI / Computer Vision
-
-- YOLOv8n
-- OpenCV
-- Custom lightweight person tracker
-- Rule-based event engine
+| Module | Status | Description |
+|---|---:|---|
+| Login/Auth | Implemented | Basic access flow for dashboard usage |
+| Live Camera Feed | Operational | Displays live webcam/CCTV-style feed inside dashboard |
+| Person Detection | Operational | YOLOv8/OpenCV pipeline detects persons from video frames |
+| Alert System | Implemented | Intrusion, loitering, SOS and dispatch updates appear as alerts |
+| Command Dashboard | Operational | Central view for system health, alerts, evidence and controls |
+| SOS Form | Implemented | Simulates passenger/operator emergency reporting |
+| Authority Workflow | Simulation-ready | Pending, assigned, running and resolved response states |
+| Reports/Export | JSON/CSV ready | Converts events into reviewable summaries and reports |
+| SQLite Database | Local storage | Stores event data, severity, time, camera and location details |
 
 ---
 
-## Folder Structure
-
-```txt
-E:\Copycat2
-│
-├── backend/
-│   └── app/
-│       ├── api/
-│       ├── services/
-│       ├── database/
-│       └── main.py
-│
-├── frontend/
-│   └── dashboard/
-│       ├── src/
-│       │   └── App.jsx
-│       ├── package.json
-│       └── vite.config.js
-│
-├── pipelines/
-│   └── tracking_pipeline.py
-│
-├── tracking/
-│   └── bytetrack/
-│       └── tracker.py
-│
-├── event_engine/
-│   └── engine.py
-│
-├── ai_engine/
-│   └── inference/
-│       └── detector.py
-│
-├── recordings/
-│   ├── snapshots/
-│   └── clips/
-│
-├── start_backend.ps1
-├── start_frontend.ps1
-├── start_pipeline.ps1
-├── START_FULL_SYSTEM.txt
-└── README.md
-
-
-How to Run the Project
-Run the project in three separate PowerShell terminals.
-
-Terminal 1 — Start Backend
-cd E:\Copycat2.\start_backend.ps1
-Backend runs at:
-http://127.0.0.1:8000
-API docs:
-http://127.0.0.1:8000/docs
-
-Terminal 2 — Start Frontend Dashboard
-cd E:\Copycat2.\start_frontend.ps1
-Open dashboard:
-http://localhost:5173/
-
-Terminal 3 — Start AI Camera Pipeline
-cd E:\Copycat2.\start_pipeline.ps1
-This starts:
-
-
-Webcam capture
-
-
-YOLO object detection
-
-
-Person tracking
-
-
-Event engine
-
-
-Snapshot evidence
-
-
-Live camera stream to dashboard
-
-
-
-Health Check Commands
-Backend Health
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/health"
-
-Dispatch Summary
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/dispatches/summary"
-
-Trigger SOS Manually
-Invoke-RestMethod -Method Post `  -Uri "http://127.0.0.1:8000/sos" `  -ContentType "application/json" `  -Body '{"user_name":"Demo User","phone":"demo","incident_location":"Demo Laptop Location","incident_type":"Medical Emergency","help_needed":["POLICE","AMBULANCE"],"details":"Manual SOS test"}'
-
-Frontend Build Check
-cd E:\Copycat2\frontend\dashboardnpm run build
-
-Demo Flow
-
-
-Start backend.
-
-
-Start frontend.
-
-
-Start AI pipeline.
-
-
-Open dashboard.
-
-
-Open Live Feed.
-
-
-Show object detection.
-
-
-Show person tracking.
-
-
-Open SOS Control.
-
-
-Trigger SOS alert.
-
-
-Confirm SOS alert is pinned at top.
-
-
-Open Authority Response Center.
-
-
-Assign unit.
-
-
-Mark Running.
-
-
-Resolve incident.
-
-
-Confirm emergency banner disappears.
-
-
-Ask AI Assistant:
-
-
-system health
-
-
-show pending incidents
-
-
-what should I do next?
-
-
-how to demo?
-
-
-
-
-
-Current Final MVP Status
-Backend API: WorkingFrontend Dashboard: WorkingLive Feed: WorkingObject Detection: WorkingPerson Tracking: WorkingSOS Alert: WorkingPinned SOS Alert: WorkingAuthority Workflow: WorkingHeatmap: WorkingAssistant: WorkingFinal Backup: CreatedRun Scripts: Created
-
-Known Limitations
-This is a local MVP prototype, not a production deployment.
-Current limitations:
-
-
-Runs locally on laptop.
-
-
-CPU-only performance depends on hardware.
-
-
-YOLOv8n is used for lightweight detection.
-
-
-PPE detection is excluded in final MVP.
-
-
-Weapon detection is not enabled as a heavy real-time CPU model.
-
-
-Video clips are disabled by default for performance.
-
-
-Tracking is optimized mainly for persons.
-
-
-SOS and authority workflow are demo-realistic, not connected to actual emergency services.
-
-
-
-Future Scope
-
-
-Multi-camera support
-
-
-Real IP camera / CCTV integration
-
-
-Mobile app integration
-
-
-Real notification system
-
-
-Role-based authentication
-
-
-Cloud deployment
-
-
-GPU acceleration
-
-
-Advanced pose/action detection
-
-
-Real weapon detection model
-
-
-Audio distress detection
-
-
-Production-grade incident management
-
-
-Real GIS map integration
-
-
-Authority mobile dashboard
-
-
-
-Team
-Project: SurakshaDrishti AI
-Team: TriNetra
-
-Final Note
-SurakshaDrishti AI demonstrates how AI, computer vision, dashboards, SOS workflows, and authority response management can be combined into a local public-safety command-center prototype.
+## System Workflow
+
+```text
+CCTV / Webcam Input
+        ↓
+OpenCV Frame Capture
+        ↓
+YOLOv8 Person/Object Detection
+        ↓
+Tracking + Event Engine
+        ↓
+FastAPI Backend + SQLite Storage
+        ↓
+React Dashboard + WebSocket Alerts
+        ↓
+SOS / Authority Workflow / Reports
+```
+
+---
+
+## Technology Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React + Vite |
+| Backend | FastAPI |
+| AI/ML | Python, OpenCV, YOLOv8 |
+| Database | SQLite |
+| Realtime | WebSocket |
+| Deployment Mode | Localhost demo + GitHub source |
+
+---
+
+## Run Commands
+
+Run these PowerShell shortcuts from the project root:
+
+```powershell
+.\start_backend.ps1
+.\start.frontend.ps1
+.\start.pipeline.ps1
+```
+
+Recommended demo order:
+
+1. Start backend.
+2. Start frontend.
+3. Start AI pipeline.
+4. Open the local dashboard URL.
+5. Show live camera feed and person detection.
+6. Trigger or wait for intrusion/loitering alert.
+7. Show SOS form and authority response workflow.
+8. Export event report as JSON/CSV.
+
+---
+
+## Demo Highlights
+
+- Live AI camera feed with person detection bounding box.
+- Real-time alert banner and live alert feed.
+- WebSocket-connected React dashboard.
+- SOS emergency panel with incident preview.
+- Authority response center with pending/assigned/running/resolved states.
+- Predictive safety heatmap prototype.
+- Event report and daily summary export.
+
+---
+
+## Honest Project Status
+
+This is a **working MVP prototype**, not a final commercial railway product.
+
+### Built and Working
+
+- Login/auth
+- Live camera feed
+- Person detection
+- Alerts
+- Dashboard
+- SOS form
+- Dispatch simulation
+- Reports/export
+- SQLite database
+
+### Prototype / Partial
+
+- Object detection is present but unstable.
+- Loitering detection works with simple logic.
+- Intrusion detection works but zone logic needs improvement.
+- Heatmap is simulated around the demo location.
+
+### Future Scope
+
+- Weapon detection.
+- Stronger crowd detection and density estimation.
+- Improved loitering, intrusion, fight/fall detection using pose and tracking.
+- Multi-camera railway station integration.
+- Privacy safeguards such as masking, role-based access and data retention policies.
+- Docker/cloud deployment with scalable monitoring.
+
+---
+
+## Team TriNetra
+
+| Member | Role |
+|---|---|
+| Mahesh Rana | Team Leader, System Architect, Full Stack Developer & Presenter |
+| Laxman Chaudhary | AI/ML Module Developer |
+| Pradip Singh | Backend & Database Developer |
+| Ashutosh Mishra | Frontend Dashboard Developer |
+| Gagan Bahadur Guru Dhami | UI/UX, Branding & Presentation Designer |
+| Sandip Sha | Testing, Deployment & Demo Coordinator |
+| Osama Idris Ali Mohamed | Research & Documentation Lead |
+
+---
+
+## Project Identity
+
+| Detail | Value |
+|---|---|
+| Project Title | SurakshaDrishti AI - AI/ML-Based Railway Crowd and Crime Monitoring System |
+| Team | TriNetra |
+| College | Rathinam Technical Campus |
+| Department | Department of Computer Science and Humanities |
+| Academic Year | 2025-2026 |
+| Event | YUDHISTRA Project Demo Day 2K26 |
+| Problem Reference | SIH1349, Ministry of Railways |
+| Domain | Smart Automation |
+| Type | Software |
+
+---
+
+## Reviewer Summary
+
+SurakshaDrishti AI demonstrates an end-to-end railway safety prototype: live camera input is processed by AI detection, converted into events by a rule engine, stored through a backend API, synchronized to a dashboard and connected to SOS, authority dispatch and reports. The current version proves the feasibility of upgrading CCTV monitoring into a real-time AI-assisted command-center workflow.
