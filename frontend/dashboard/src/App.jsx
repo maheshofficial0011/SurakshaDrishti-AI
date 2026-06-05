@@ -498,7 +498,7 @@ export default function App() {
     }
 
     function exportDailySummary() {
-        window.open(`${API_BASE}/reports/daily-summary/json`, "_blank")
+        window.open(`${API_BASE}/reports/daily?limit=100`, "_blank")
     }
 
     /*
