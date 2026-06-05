@@ -56,10 +56,10 @@ class EventEngine:
         self.loiter_movement_threshold = 90
         self.loiter_jitter_threshold = 20
 
-        self.crowd_threshold = 3
-        self.crowd_critical_threshold = 5
-        self.crowd_confirm_seconds = 2.0
-        self.crowd_critical_seconds = 6.0
+        self.crowd_threshold = 2
+        self.crowd_critical_threshold = 3
+        self.crowd_confirm_seconds = 1.0
+        self.crowd_critical_seconds = 3.0
 
         # Ignore weak/unstable tracks.
         # YOLOv8n usually gives person confidence above this when detection is stable.
@@ -236,6 +236,7 @@ class EventEngine:
             zone_people_count=zone_people_count,
             zone_people_ids=zone_people_ids,
             current_time=current_time,
+            detections=detections,
         )
 
         events.extend(crowd_events)
@@ -459,20 +460,63 @@ class EventEngine:
         zone_people_count,
         zone_people_ids,
         current_time,
+        detections=None,
     ):
         """
-        Crowd rule:
-        - Crowd detection is zone-based if zones exist.
-        - Otherwise it falls back to the full camera view.
-        - Count must remain above threshold for crowd_confirm_seconds.
-        - Severity escalates for higher count or longer crowd duration.
+        Real crowd detection logic.
 
-        Crowd events do not map to one specific bbox, so they are enriched
-        as person/person_group events using person_count and object_ids.
+        Uses two signals:
+        1. Stable tracked persons
+        2. Raw YOLO person detections as fallback
+
+        Why:
+        - Tracking may take time to stabilize.
+        - YOLO may already detect multiple persons.
+        - For demo, crowd should trigger when 2+ people are visible.
         """
 
         events = []
+        detections = detections or []
 
+        # ------------------------------------------------------------
+        # Count valid tracked people
+        # ------------------------------------------------------------
+        valid_tracks = [
+            obj
+            for obj in tracked_objects or []
+            if self.is_valid_track(obj)
+        ]
+
+        tracked_count = len(valid_tracks)
+        tracked_ids = [
+            obj.get("id")
+            for obj in valid_tracks
+            if "id" in obj
+        ]
+
+        # ------------------------------------------------------------
+        # Count raw YOLO person detections
+        # ------------------------------------------------------------
+        raw_person_detections = [
+            det
+            for det in detections
+            if str(det.get("class", "")).lower().strip() == "person"
+        ]
+
+        raw_person_count = len(raw_person_detections)
+
+        # Use whichever is higher.
+        # This keeps real tracking logic but makes crowd detection robust.
+        camera_count = max(tracked_count, raw_person_count)
+
+        if tracked_ids:
+            object_ids = tracked_ids
+        else:
+            object_ids = list(range(1, camera_count + 1))
+
+        # ------------------------------------------------------------
+        # 1. Zone-based crowd detection
+        # ------------------------------------------------------------
         if self.zones:
             for zone in self.zones:
                 zone_name = zone["name"]
@@ -487,19 +531,20 @@ class EventEngine:
 
                 if event:
                     events.append(event)
-        else:
-            valid_tracks = [obj for obj in tracked_objects if self.is_valid_track(obj)]
-            total_count = len(valid_tracks)
 
-            event = self.check_crowd_for_area(
-                area_name="Camera View",
-                count=total_count,
-                object_ids=[obj.get("id") for obj in valid_tracks if "id" in obj],
-                current_time=current_time,
-            )
+        # ------------------------------------------------------------
+        # 2. Full camera-view crowd detection
+        # ------------------------------------------------------------
+        # Always check Camera View so crowd works even outside demo zones.
+        camera_event = self.check_crowd_for_area(
+            area_name="Camera View",
+            count=camera_count,
+            object_ids=object_ids,
+            current_time=current_time,
+        )
 
-            if event:
-                events.append(event)
+        if camera_event:
+            events.append(camera_event)
 
         return events
 
