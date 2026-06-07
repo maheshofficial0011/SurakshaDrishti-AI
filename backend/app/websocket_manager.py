@@ -1,43 +1,62 @@
-# 🟢 CHANGED: Centralized websocket manager
-# REASON: Prevent circular imports and support scalable realtime architecture
+"""
+SurakshaDrishti AI - WebSocket Manager
 
-from fastapi import WebSocket
+Purpose:
+- Manage dashboard WebSocket clients.
+- Broadcast real-time events to connected frontend clients.
+- Keep terminal logs Windows-safe by avoiding emoji output.
+"""
+
 from typing import List
 
-active_websockets: List[WebSocket] = []
+from fastapi import WebSocket
 
 
-async def connect_websocket(websocket: WebSocket):
+active_connections: List[WebSocket] = []
 
+
+async def connect_websocket(websocket: WebSocket) -> None:
+    """
+    Accept and register a new WebSocket client.
+    """
     await websocket.accept()
+    active_connections.append(websocket)
 
-    active_websockets.append(websocket)
-
-    print("🟢 WebSocket client connected")
-
-
-def disconnect_websocket(websocket: WebSocket):
-
-    if websocket in active_websockets:
-
-        active_websockets.remove(websocket)
-
-    print("🔴 WebSocket disconnected")
+    # ASCII-only log avoids Windows UnicodeEncodeError.
+    print("[WS] WebSocket client connected")
 
 
-async def broadcast_event(event):
+def disconnect_websocket(websocket: WebSocket) -> None:
+    """
+    Remove a WebSocket client from active connections.
+    """
+    if websocket in active_connections:
+        active_connections.remove(websocket)
 
-    disconnected = []
+    # ASCII-only log avoids Windows UnicodeEncodeError.
+    print("[WS] WebSocket client disconnected")
 
-    for ws in active_websockets:
 
+async def broadcast_event(event: dict) -> None:
+    """
+    Broadcast an event to all connected WebSocket clients.
+
+    Failed/dead clients are removed safely.
+    """
+    disconnected_clients = []
+
+    for connection in active_connections:
         try:
-            await ws.send_json(event)
+            await connection.send_json(event)
+        except Exception:
+            disconnected_clients.append(connection)
 
-        except:
-            disconnected.append(ws)
+    for connection in disconnected_clients:
+        disconnect_websocket(connection)
 
-    for ws in disconnected:
 
-        if ws in active_websockets:
-            active_websockets.remove(ws)
+async def broadcast_message(message: dict) -> None:
+    """
+    Generic broadcast helper for non-event messages.
+    """
+    await broadcast_event(message)

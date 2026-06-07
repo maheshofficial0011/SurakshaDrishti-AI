@@ -5,6 +5,7 @@ from fastapi import APIRouter
 
 from backend.app.api.routes.events import router as events_router
 from backend.app.api.routes.analytics import router as analytics_router
+from backend.app.api.routes.daily_report import router as daily_report_router
 from backend.app.api.routes.reports import router as reports_router
 from backend.app.api.routes.auth import router as auth_router
 
@@ -19,6 +20,10 @@ api_router = APIRouter()
 # Existing routes preserved
 api_router.include_router(events_router)
 api_router.include_router(analytics_router)
+
+# Daily report route must be registered before reports router
+api_router.include_router(daily_report_router)
+
 api_router.include_router(reports_router)
 api_router.include_router(auth_router)
 
